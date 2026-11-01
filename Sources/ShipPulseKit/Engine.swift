@@ -19,6 +19,7 @@ final class Engine {
     private let context: RecordContext
     private let defaults: UserDefaults
     private var isFlushing = false
+    private var flushRequested = false
 
     private enum Key {
         static let sampleRate = "ShipPulseKit.sampleRate"
@@ -64,12 +65,11 @@ final class Engine {
     func start() {
         #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
         let collector = MetricKitCollector(stateReportingDomains: configuration.additionalStateDomains.union([Schema.screenDomain]))
-        let installID = retention.installID()
         let fallback = context
-        collector.start(
-            collectsMetrics: configuration.collectsMetrics,
-            collectsDiagnostics: configuration.collectsDiagnostics,
-            onMetricReport: { [weak self] report in
+        #if !os(visionOS)
+        if configuration.collectsMetrics {
+            let installID = retention.installID()
+            collector.startMetrics { [weak self] report in
                 let record = PayloadMapper.summaryRecord(
                     report: ReportMapper.dailyReport(from: report),
                     rawJSON: try? JSONEncoder().encode(report),
@@ -80,12 +80,17 @@ final class Engine {
                     now: Date()
                 )
                 await self?.enqueue([record])
-            },
-            onDiagnosticReport: { [weak self] report in
+            }
+        }
+        #endif
+        if configuration.collectsDiagnostics {
+            collector.startDiagnostics { [weak self] report in
                 let fields = ReportMapper.diagnosticFields(report)
                 let env = report.environment
+                guard let encoded = try? JSONEncoder().encode(report),
+                      let json = PayloadMapper.redactedDiagnosticJSON(encoded) else { return }
                 let record = PayloadMapper.diagnosticRecord(
-                    json: (try? JSONEncoder().encode(report)) ?? Data(),
+                    json: json,
                     kind: fields.kind,
                     durationMs: fields.durationMs,
                     extraFields: fields.extra,
@@ -97,7 +102,7 @@ final class Engine {
                 )
                 await self?.enqueue([record])
             }
-        )
+        }
         self.collector = collector
         #endif
         #if canImport(UIKit) && !os(watchOS)
@@ -144,10 +149,23 @@ final class Engine {
 
     /// Uploads queued records in batches of 100 until the queue is empty or CloudKit
     /// rejects a batch.
+    ///
+    /// A call made while a flush is running asks it for one more pass, so a record queued
+    /// just after the running pass read the queue still goes out now.
     func flush() async {
-        guard !isFlushing else { return }
+        guard !isFlushing else {
+            flushRequested = true
+            return
+        }
         isFlushing = true
         defer { isFlushing = false }
+        repeat {
+            flushRequested = false
+            await drainQueue()
+        } while flushRequested
+    }
+
+    private func drainQueue() async {
         guard await uploader.isAvailable() else { return }
         while let batch = try? await queue.pending(limit: 100), !batch.isEmpty {
             guard let accepted = try? await uploader.upload(batch), !accepted.isEmpty else { return }
@@ -202,7 +220,11 @@ final class Engine {
     private func observeForeground() {
         #if canImport(UIKit) && !os(watchOS)
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.recordActivity() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.recordActivity()
+                Task { await self.flush() }
+            }
         }
         #endif
     }

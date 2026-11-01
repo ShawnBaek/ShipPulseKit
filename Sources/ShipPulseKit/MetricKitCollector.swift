@@ -6,7 +6,10 @@ import ShipPulseKitCore
 /// Collects iOS 27 MetricKit reports through `MetricManager`'s async streams.
 ///
 /// Metric reports arrive about once a day per device. Diagnostic reports arrive as they
-/// occur, delivered on a later launch.
+/// occur, delivered on a later launch. visionOS has no metric reports, only diagnostics.
+///
+/// `@unchecked Sendable`: `tasks` is written only from ``Engine`` on the main actor, and
+/// `MetricManager` is not marked `Sendable` by MetricKit.
 final class MetricKitCollector: @unchecked Sendable {
     let manager: MetricManager
     private var tasks: [Task<Void, Never>] = []
@@ -23,33 +26,26 @@ final class MetricKitCollector: @unchecked Sendable {
         #endif
     }
 
-    /// Starts listening to MetricKit's report streams.
+    #if !os(visionOS)
+    /// Starts listening for daily metric reports.
     ///
-    /// - Parameters:
-    ///   - collectsMetrics: Whether to listen for daily metric reports.
-    ///   - collectsDiagnostics: Whether to listen for diagnostic reports.
-    ///   - onMetricReport: Called for each metric report.
-    ///   - onDiagnosticReport: Called for each diagnostic report.
-    func start(
-        collectsMetrics: Bool,
-        collectsDiagnostics: Bool,
-        onMetricReport: @escaping @Sendable (MetricReport) async -> Void,
-        onDiagnosticReport: @escaping @Sendable (DiagnosticReport) async -> Void
-    ) {
-        #if !os(visionOS)
-        if collectsMetrics {
-            let reports = manager.metricReports
-            tasks.append(Task.detached(priority: .utility) {
-                for await report in reports { await onMetricReport(report) }
-            })
-        }
-        #endif
-        if collectsDiagnostics {
-            let diagnostics = manager.diagnosticReports
-            tasks.append(Task.detached(priority: .utility) {
-                for await report in diagnostics { await onDiagnosticReport(report) }
-            })
-        }
+    /// - Parameter onReport: Called for each metric report.
+    func startMetrics(onReport: @escaping @Sendable (MetricReport) async -> Void) {
+        let reports = manager.metricReports
+        tasks.append(Task.detached(priority: .utility) {
+            for await report in reports { await onReport(report) }
+        })
+    }
+    #endif
+
+    /// Starts listening for diagnostic reports.
+    ///
+    /// - Parameter onReport: Called for each diagnostic report.
+    func startDiagnostics(onReport: @escaping @Sendable (DiagnosticReport) async -> Void) {
+        let diagnostics = manager.diagnosticReports
+        tasks.append(Task.detached(priority: .utility) {
+            for await report in diagnostics { await onReport(report) }
+        })
     }
 
     deinit {
@@ -59,6 +55,7 @@ final class MetricKitCollector: @unchecked Sendable {
 
 /// Flattens MetricKit's typed results into the stable `MetricSummary` schema.
 enum ReportMapper {
+    #if !os(visionOS)
     /// Flattens a metric report, including its per-state entries.
     ///
     /// - Parameter report: The MetricKit report.
@@ -175,6 +172,8 @@ enum ReportMapper {
         return s
     }
 
+    #endif
+
     /// The fields that make a diagnostic queryable without decoding its call stacks.
     ///
     /// - Parameter report: The MetricKit diagnostic.
@@ -184,19 +183,20 @@ enum ReportMapper {
         switch report.result {
         case .crash(let d):
             var extra: [String: FieldValue] = [:]
-            if let category = d.terminationCategory { extra["terminationCategory"] = .string(category.rawValue) }
-            if let signal = d.signal { extra["signal"] = .int(Int64(signal)) }
-            if let type = d.exceptionType { extra["exceptionType"] = .int(Int64(type)) }
+            if let category = d.terminationCategory { extra[Schema.Field.terminationCategory] = .string(category.rawValue) }
+            if let signal = d.signal { extra[Schema.Field.signal] = .int(Int64(signal)) }
+            if let type = d.exceptionType { extra[Schema.Field.exceptionType] = .int(Int64(type)) }
             return ("crash", nil, extra)
         case .hang(let d): return ("hang", milliseconds(d.hangDuration), [:])
         case .appLaunch(let d): return ("appLaunch", milliseconds(d.launchDuration), [:])
         case .cpuException(let d): return ("cpuException", milliseconds(d.totalCPUTime), [:])
-        case .diskWriteException(let d): return ("diskWriteException", nil, ["writesMB": .double(megabytes(d.totalBytesWritten))])
+        case .diskWriteException(let d): return ("diskWriteException", nil, [Schema.Field.writesMB: .double(megabytes(d.totalBytesWritten))])
         case .memoryException: return ("memoryException", nil, [:])
         @unknown default: return ("unknown", nil, [:])
         }
     }
 
+    #if !os(visionOS)
     private static func histogram<D: Dimension>(_ source: MetricKit.Histogram<D>) -> ShipPulseKitCore.Histogram {
         ShipPulseKitCore.Histogram(buckets: source.buckets.map {
             .init(start: normalized($0.lowerBound), end: normalized($0.upperBound), count: $0.count)
@@ -208,6 +208,8 @@ enum ReportMapper {
         if let duration = measurement as? Measurement<UnitDuration> { return milliseconds(duration) }
         return measurement.value
     }
+
+    #endif
 
     private static func seconds(_ m: Measurement<UnitDuration>) -> Double { m.converted(to: .seconds).value }
     private static func milliseconds(_ m: Measurement<UnitDuration>) -> Double { m.converted(to: .milliseconds).value }

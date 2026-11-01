@@ -1,4 +1,4 @@
-#if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
+#if canImport(MetricKit) && !os(watchOS) && !os(tvOS) && !os(visionOS)
 import Foundation
 import ShipPulseKitCore
 
@@ -126,7 +126,7 @@ extension View {
 }
 #endif
 
-#if canImport(UIKit) && !os(visionOS)
+#if canImport(UIKit)
 import UIKit
 
 extension UIView {

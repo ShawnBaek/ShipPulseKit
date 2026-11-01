@@ -45,6 +45,10 @@ public enum Schema {
         public static let payloadEncoding = "payloadEncoding"
         public static let sampleRate = "sampleRate"
         public static let diagnosticSampleRate = "diagnosticSampleRate"
+        public static let terminationCategory = "terminationCategory"
+        public static let signal = "signal"
+        public static let exceptionType = "exceptionType"
+        public static let writesMB = "writesMB"
     }
 
     /// The custom security role defined in `CloudKit/ShipPulseKit.ckdb`.

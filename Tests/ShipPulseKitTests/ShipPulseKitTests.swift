@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 import Testing
 import ShipPulseKitCore
@@ -101,5 +102,90 @@ private func day(_ iso: String) -> Date {
         let queue = makeQueue(maxAge: 60)
         try await queue.enqueue([record("stale", at: Date() - 3600), record("fresh")])
         #expect(try await queue.pending(limit: 10).map(\.recordName) == ["fresh"])
+    }
+}
+
+@Suite struct DiagnosticRedactionTests {
+    @Test func removesExceptionStringsAtAnyDepth() throws {
+        let json = Data(#"{"result":{"crash":{"exceptionReason":{"composedMessage":"user@example.com","arguments":["secret"],"className":"NSInvalidArgumentException"}}}}"#.utf8)
+        let redacted = try #require(PayloadMapper.redactedDiagnosticJSON(json))
+        let text = String(decoding: redacted, as: UTF8.self)
+        #expect(!text.contains("user@example.com"))
+        #expect(!text.contains("secret"))
+        #expect(text.contains("NSInvalidArgumentException"))
+    }
+
+    @Test func keyOrderDoesNotChangeTheRecordName() throws {
+        let a = try #require(PayloadMapper.redactedDiagnosticJSON(Data(#"{"b":1,"a":{"y":2,"x":3}}"#.utf8)))
+        let b = try #require(PayloadMapper.redactedDiagnosticJSON(Data(#"{"a":{"x":3,"y":2},"b":1}"#.utf8)))
+        #expect(a == b)
+    }
+
+    @Test func rejectsNonJSON() {
+        #expect(PayloadMapper.redactedDiagnosticJSON(Data()) == nil)
+    }
+}
+
+@Suite struct UploadSplittingTests {
+    private func records(_ count: Int) -> [PendingRecord] {
+        (0..<count).map { PendingRecord(kind: .activeDay, recordName: "r\($0)", fields: [:], createdAt: Date()) }
+    }
+
+    @Test func splitsBatchesOverTheLimit() async throws {
+        var requests: [Int] = []
+        let accepted = try await CloudKitUploader.uploadSplitting(records(10)) { batch in
+            requests.append(batch.count)
+            if batch.count > 3 { throw CKError(.limitExceeded) }
+            return batch.map(\.recordName)
+        }
+        #expect(Set(accepted) == Set(records(10).map(\.recordName)))
+        #expect(requests.first == 10)
+    }
+
+    @Test func dropsASingleRecordThatIsTooLarge() async throws {
+        let accepted = try await CloudKitUploader.uploadSplitting(records(1)) { _ in throw CKError(.limitExceeded) }
+        #expect(accepted == ["r0"])
+    }
+
+    @Test func rethrowsOtherErrors() async {
+        await #expect(throws: CKError.self) {
+            _ = try await CloudKitUploader.uploadSplitting(records(4)) { _ in throw CKError(.networkUnavailable) }
+        }
+    }
+}
+
+private actor RecordingUploader: RecordUploading {
+    private(set) var batches: [[String]] = []
+
+    func isAvailable() async -> Bool { true }
+
+    func upload(_ records: [PendingRecord]) async throws -> [String] {
+        let names = records.map(\.recordName)
+        batches.append(names)
+        return names
+    }
+
+    func fetchSamplingConfig(bundleID: String) async -> RemoteSamplingConfig? { nil }
+}
+
+@Suite struct EngineFlushTests {
+    @MainActor @Test func uploadsTheWholeQueueInBatches() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "ShipPulseKitTests-\(UUID().uuidString)")
+        let queue = UploadQueue(directory: dir, maxAge: 3600, maxCount: 500)
+        let uploader = RecordingUploader()
+        let engine = try Engine(
+            configuration: Configuration(sampling: .fixed(1), diagnosticSampling: .fixed(1)),
+            queue: queue,
+            uploader: uploader,
+            defaults: freshDefaults(),
+            context: context
+        )
+        let now = Date()
+        let records = (0..<150).map {
+            PendingRecord(kind: .activeDay, recordName: "r\($0)", fields: [:], createdAt: now + Double($0))
+        }
+        await engine.enqueue(records)
+        #expect(await uploader.batches.map(\.count) == [100, 50])
+        #expect(try await queue.count() == 0)
     }
 }

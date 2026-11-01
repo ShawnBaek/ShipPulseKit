@@ -24,7 +24,8 @@ All types carry the same context fields: `bundleID`, `appVersion`, `build`, `osV
 Retries and redelivered payloads overwrite the existing record instead of duplicating it.
 
 - `summary-<installID>-<windowStart>`
-- `diagnostic-<bundleID>-<build>-<windowStart>-<hash>`
+- `diagnostic-<bundleID>-<build>-<kind>-<hash>`, where `<hash>` is the FNV-1a hash of the
+  redacted, key-sorted diagnostic JSON
 - `install-<installID>`
 - `active-<installID>-<yyyy-MM-dd>`
 
@@ -90,14 +91,22 @@ xcrun cktool import-schema --team-id TEAM --container-id iCloud.com.you.app --en
 Then:
 
 1. In CloudKit Console, open **Security Roles** and assign `ShipPulseAdmin` to your iCloud user.
-2. Deploy the schema to **Production** in CloudKit Console before shipping a release build.
+2. Before your first TestFlight or App Store build, deploy the schema to **Production** in
+   CloudKit Console (**Deploy Schema Changes**). Release builds write to Production; until
+   the schema is there, their records stay queued on the device.
 
 ## Privacy
 
-- **No personal data.** Records contain no user data, Apple Account identifiers, IDFV or
-  IDFA. `installID` is a random UUID per app install, stored in UserDefaults. It is never
-  shared across apps and is reset when the app is deleted.
-- **Privacy label:** declare *Diagnostics → Performance Data* and *Crash Data*. Mark them
-  as not linked to identity and not used for tracking.
+- **What the SDK sends:** no IDFV, IDFA or app user data. `installID` is a random UUID per
+  app install, stored in UserDefaults. It is never shared across apps and is reset when the
+  app is deleted. Diagnostic JSON has Objective-C exception `composedMessage` and
+  `arguments` removed, because they can hold runtime strings with user data.
+- **What CloudKit adds:** every record carries `___createdBy`, the creator's
+  container-scoped user record ID. It is stable across reinstalls, so it links all records
+  from one iCloud account, including diagnostics. Public-database records are readable by
+  any client of the container (`_world` READ).
+- **Privacy label:** declare *Diagnostics → Performance Data* and *Crash Data*, not used for
+  tracking. Because of `___createdBy`, decide with your own policy whether they count as
+  linked to identity.
 - **No deletion by default:** CloudKit has no automatic expiry. ShipPulse prunes records
   older than the retention window you choose, which is why the admin role has WRITE.

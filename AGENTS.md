@@ -54,7 +54,8 @@ Import replaces the whole schema of the target environment.
 1. **Never crash or block the host app.**
    - No `fatalError`, force unwraps on external data, or `try!` in `Sources/ShipPulseKit`.
    - Keep main-thread work tiny.
-   - A missing iCloud container must degrade to `DisabledUploader`.
+   - A missing iCloud container makes `start()` throw `ShipPulseKitError`; nothing else
+     fails.
 2. **Schema changes go in three places in one change:**
    - `CloudKit/ShipPulseKit.ckdb`
    - `Sources/ShipPulseKitCore/Schema.swift`
@@ -74,7 +75,11 @@ Import replaces the whole schema of the target environment.
    - Normalize units: histograms in ms, totals in seconds, sizes in MB.
    - The raw report JSON is uploaded too, so unmapped metrics are never lost.
 6. **Privacy is a feature.**
-   - No user data, account identifiers, IDFA, IDFV or network calls outside CloudKit.
+   - No app user data, IDFA, IDFV or network calls outside CloudKit.
+   - Strip free-form runtime strings (exception messages and arguments) from diagnostics
+     before upload; see `PayloadMapper.redactedDiagnosticJSON`.
+   - CloudKit's `___createdBy` links records to an iCloud account; keep the docs honest
+     about it.
    - `installID` stays a per-install random UUID in UserDefaults.
 7. **Public API is a contract.**
    - Hitch region names are `StaticString`, because MetricKit requires it.
@@ -84,8 +89,11 @@ Import replaces the whole schema of the target environment.
 8. **Swift 6 strict concurrency.**
    - Prefer actors and `@MainActor` over locks.
    - `@unchecked Sendable` only where a framework forces it, with the reason in a comment.
-9. **Platform guards:** MetricKit is unavailable on watchOS and tvOS, and `metricReports` is
-   unavailable on visionOS. Guard with `#if canImport(MetricKit) && !os(watchOS) && !os(tvOS)`.
+9. **Platform guards:** MetricKit is unavailable on watchOS and tvOS. On visionOS,
+   `metricReports`, `MetricReport` and `logHandle(category:)` are unavailable, so metric
+   mapping and `Hitches/*` also need `!os(visionOS)`. Build every platform before
+   publishing: `xcodebuild build -scheme ShipPulseKit -destination generic/platform=visionOS`
+   (and `iOS`, `watchOS`).
 10. **Keep Core portable.** `ShipPulseKitCore` must not import MetricKit, CloudKit, UIKit or
     SwiftUI.
 

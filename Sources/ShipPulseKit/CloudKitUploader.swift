@@ -69,14 +69,48 @@ struct CloudKitUploader: RecordUploading {
     /// Saves records, overwriting any with the same name.
     ///
     /// A `serverRecordChanged` conflict counts as accepted: the record already exists.
+    /// Batches over CloudKit's request limits are split, see ``uploadSplitting(_:send:)``.
     func upload(_ records: [PendingRecord]) async throws -> [String] {
+        try await Self.uploadSplitting(records, send: save)
+    }
+
+    /// Sends records, halving any batch CloudKit rejects with `limitExceeded`.
+    ///
+    /// CloudKit limits a request to 400 records and 2 MB and asks callers to split and
+    /// retry. Without this, one oversized oldest batch would block the queue for good. A
+    /// single record that is still too large can never upload, so it is reported as
+    /// accepted and leaves the queue.
+    ///
+    /// - Parameters:
+    ///   - records: The records to send.
+    ///   - send: Sends one batch and returns the accepted names.
+    /// - Returns: Names of the records that were accepted or dropped as too large.
+    /// - Throws: Any error other than `limitExceeded`.
+    static func uploadSplitting(
+        _ records: [PendingRecord],
+        send: ([PendingRecord]) async throws -> [String]
+    ) async throws -> [String] {
         guard !records.isEmpty else { return [] }
+        do {
+            return try await send(records)
+        } catch let error as CKError where error.code == .limitExceeded {
+            guard records.count > 1 else { return records.map(\.recordName) }
+            let middle = records.count / 2
+            let first = try await uploadSplitting(Array(records[..<middle]), send: send)
+            let second = try await uploadSplitting(Array(records[middle...]), send: send)
+            return first + second
+        }
+    }
+
+    private func save(_ records: [PendingRecord]) async throws -> [String] {
         let ckRecords = records.map(Self.makeRecord)
         let (saveResults, _) = try await database.modifyRecords(saving: ckRecords, deleting: [], savePolicy: .allKeys, atomically: false)
         return saveResults.compactMap { id, result in
             switch result {
             case .success: return id.recordName
             case .failure(let error as CKError) where error.code == .serverRecordChanged: return id.recordName
+            // A single record over CloudKit's size limit can never upload; drop it.
+            case .failure(let error as CKError) where error.code == .limitExceeded: return id.recordName
             case .failure: return nil
             }
         }

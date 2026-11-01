@@ -1,4 +1,4 @@
-#if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
+#if canImport(MetricKit) && !os(watchOS) && !os(tvOS) && !os(visionOS)
 import Foundation
 import MetricKit
 import os
@@ -12,6 +12,9 @@ import ShipPulseKitCore
 /// measurement is MetricKit's own, at no runtime cost to the app.
 ///
 /// Names are `StaticString` because MetricKit signposts require compile-time names.
+///
+/// `@unchecked Sendable`: `isOpen` is mutated only on the main actor; `deinit` reads it
+/// after the last reference is gone.
 public final class HitchInterval: @unchecked Sendable {
     private let name: StaticString
     private let log: OSLog

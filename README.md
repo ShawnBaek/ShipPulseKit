@@ -12,7 +12,8 @@ The SDK only forwards MetricKit reports, marks screens and regions for MetricKit
 attribute, and records anonymous retention.
 
 Requires iOS, macOS, watchOS or visionOS 27+. Test on a physical device; MetricKit doesn't
-report in the Simulator.
+report in the Simulator. visionOS has no daily metric reports, so it sends diagnostics and
+retention only.
 
 ## 1. Enable CloudKit
 
@@ -21,6 +22,11 @@ report in the Simulator.
 2. Add the ShipPulseKit record types to that container. See
    [docs/CloudKitSchema.md](docs/CloudKitSchema.md#installing-the-schema).
 3. In CloudKit Console, assign the `ShipPulseAdmin` role to your iCloud user.
+4. Before your first TestFlight or App Store build, deploy the schema to **Production**:
+   CloudKit Console → your container → **Deploy Schema Changes**. Debug builds write to the
+   Development environment; TestFlight and App Store builds write to Production. Until the
+   schema is in Production, release builds keep records queued on the device and nothing
+   arrives.
 
 Without a container, `start()` throws `ShipPulseKitError.iCloudContainerUnavailable`. It never crashes your app.
 
@@ -116,9 +122,16 @@ hitch measurement. Open the sample's `.xcodeproj`, set your team, and run it on 
 
 ## Privacy
 
-There is no user data, account ID, IDFA or IDFV, and the SDK makes no network calls
-outside CloudKit. For the privacy label, declare *Diagnostics → Performance Data, Crash
-Data*, not linked to identity.
+The SDK sends no IDFA, IDFV or app user data, and makes no network calls outside CloudKit.
+Diagnostics are sent without Objective-C exception messages or arguments, which could
+contain user data.
+
+Records go to your container's public database, readable by any client of that container.
+CloudKit stamps each record with the creator's container-scoped user record ID
+(`___createdBy`), which links records from one iCloud account. For the privacy label,
+declare *Diagnostics → Performance Data* and *Crash Data*, used for app functionality and
+analytics, not for tracking. Whether you also mark them linked to identity depends on your
+own policy; see [docs/CloudKitSchema.md](docs/CloudKitSchema.md#privacy).
 
 ## License
 

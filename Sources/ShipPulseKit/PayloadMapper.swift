@@ -81,6 +81,37 @@ enum PayloadMapper {
         return PendingRecord(kind: .diagnosticPayload, recordName: name, fields: fields, createdAt: now)
     }
 
+    /// Diagnostic JSON with free-form runtime strings removed, in a stable key order.
+    ///
+    /// Objective-C exception `composedMessage` and `arguments` can carry user data, and the
+    /// public database is world-readable, so both are dropped wherever they appear. Sorted
+    /// keys make the content hash in the record name the same in every process, so a
+    /// redelivered diagnostic overwrites instead of duplicating.
+    ///
+    /// - Parameter json: MetricKit's encoding of a `DiagnosticReport`.
+    /// - Returns: The redacted JSON, or `nil` if it isn't a JSON object.
+    static func redactedDiagnosticJSON(_ json: Data) -> Data? {
+        guard let object = try? JSONSerialization.jsonObject(with: json) else { return nil }
+        let redacted = removingKeys(redactedKeys, from: object)
+        return try? JSONSerialization.data(withJSONObject: redacted, options: [.sortedKeys])
+    }
+
+    static let redactedKeys: Set<String> = ["composedMessage", "arguments"]
+
+    private static func removingKeys(_ keys: Set<String>, from value: Any) -> Any {
+        if let dictionary = value as? [String: Any] {
+            var result: [String: Any] = [:]
+            for (key, child) in dictionary where !keys.contains(key) {
+                result[key] = removingKeys(keys, from: child)
+            }
+            return result
+        }
+        if let array = value as? [Any] {
+            return array.map { removingKeys(keys, from: $0) }
+        }
+        return value
+    }
+
     /// zlib-compresses data, or returns it unchanged if compression fails.
     static func compressed(_ data: Data) -> Data {
         (try? (data as NSData).compressed(using: .zlib) as Data) ?? data
