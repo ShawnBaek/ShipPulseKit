@@ -1,0 +1,127 @@
+DEFINE SCHEMA
+
+    // ShipPulseKit record types. Merge these into your container's schema; don't import this
+    // file on its own, because `cktool import-schema` replaces the whole schema.
+    //
+    // Permissions (public database):
+    //   _icloud   devices signed in to iCloud create their own records
+    //   _creator  a device may overwrite only what it created (retried uploads)
+    //   _world    read, so the ShipPulse app can read with a CloudKit Web Services API token
+    //   ShipPulseAdmin  assign to your own iCloud user in CloudKit Console; it writes SPConfig
+    //                   and prunes old records
+
+    CREATE ROLE ShipPulseAdmin;
+
+    RECORD TYPE SPMetricSummary (
+        "___createTime" TIMESTAMP QUERYABLE SORTABLE,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP QUERYABLE SORTABLE,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        appVersion      STRING QUERYABLE SORTABLE,
+        build           STRING QUERYABLE SORTABLE,
+        bundleID        STRING QUERYABLE,
+        device          STRING QUERYABLE SORTABLE,
+        installID       STRING QUERYABLE,
+        isTestFlight    INT64 QUERYABLE,
+        lowPowerMode    INT64 QUERYABLE,
+        osVersion       STRING QUERYABLE SORTABLE,
+        report          BYTES,
+        sampleRate      DOUBLE,
+        schemaVersion   INT64 QUERYABLE,
+        summary         BYTES,
+        timeBegin       TIMESTAMP QUERYABLE SORTABLE,
+        timeEnd         TIMESTAMP QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world",
+        GRANT WRITE TO ShipPulseAdmin
+    );
+
+    RECORD TYPE SPDiagnosticPayload (
+        "___createTime"     TIMESTAMP QUERYABLE SORTABLE,
+        "___createdBy"      REFERENCE,
+        "___etag"           STRING,
+        "___modTime"        TIMESTAMP QUERYABLE SORTABLE,
+        "___modifiedBy"     REFERENCE,
+        "___recordID"       REFERENCE QUERYABLE,
+        appVersion          STRING QUERYABLE SORTABLE,
+        build               STRING QUERYABLE SORTABLE,
+        bundleID            STRING QUERYABLE,
+        device              STRING QUERYABLE SORTABLE,
+        durationMs          DOUBLE QUERYABLE SORTABLE,
+        exceptionType       INT64 QUERYABLE,
+        isTestFlight        INT64 QUERYABLE,
+        kind                STRING QUERYABLE,
+        osVersion           STRING QUERYABLE SORTABLE,
+        payload             BYTES,
+        payloadEncoding     STRING,
+        sampleRate          DOUBLE,
+        signal              INT64 QUERYABLE,
+        terminationCategory STRING QUERYABLE,
+        timeBegin           TIMESTAMP QUERYABLE SORTABLE,
+        timeEnd             TIMESTAMP QUERYABLE SORTABLE,
+        writesMB            DOUBLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world",
+        GRANT WRITE TO ShipPulseAdmin
+    );
+
+    RECORD TYPE SPInstall (
+        "___createTime" TIMESTAMP QUERYABLE SORTABLE,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP QUERYABLE SORTABLE,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        appVersion      STRING QUERYABLE SORTABLE,
+        build           STRING QUERYABLE SORTABLE,
+        bundleID        STRING QUERYABLE,
+        device          STRING QUERYABLE SORTABLE,
+        firstLaunch     TIMESTAMP QUERYABLE SORTABLE,
+        installID       STRING QUERYABLE,
+        osVersion       STRING QUERYABLE SORTABLE,
+        sampleRate      DOUBLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world",
+        GRANT WRITE TO ShipPulseAdmin
+    );
+
+    RECORD TYPE SPActiveDay (
+        "___createTime"  TIMESTAMP QUERYABLE SORTABLE,
+        "___createdBy"   REFERENCE,
+        "___etag"        STRING,
+        "___modTime"     TIMESTAMP QUERYABLE SORTABLE,
+        "___modifiedBy"  REFERENCE,
+        "___recordID"    REFERENCE QUERYABLE,
+        appVersion       STRING QUERYABLE SORTABLE,
+        build            STRING QUERYABLE SORTABLE,
+        bundleID         STRING QUERYABLE,
+        day              STRING QUERYABLE SORTABLE,
+        daysSinceInstall INT64 QUERYABLE SORTABLE,
+        device           STRING QUERYABLE SORTABLE,
+        installID        STRING QUERYABLE,
+        osVersion        STRING QUERYABLE SORTABLE,
+        sampleRate       DOUBLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world",
+        GRANT WRITE TO ShipPulseAdmin
+    );
+
+    RECORD TYPE SPConfig (
+        "___createTime"      TIMESTAMP,
+        "___createdBy"       REFERENCE,
+        "___etag"            STRING,
+        "___modTime"         TIMESTAMP QUERYABLE SORTABLE,
+        "___modifiedBy"      REFERENCE,
+        "___recordID"        REFERENCE QUERYABLE,
+        bundleID             STRING QUERYABLE,
+        diagnosticSampleRate DOUBLE,
+        sampleRate           DOUBLE,
+        GRANT READ TO "_world",
+        GRANT CREATE, WRITE TO ShipPulseAdmin
+    );
