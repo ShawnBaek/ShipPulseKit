@@ -88,6 +88,9 @@ try ShipPulseKit.start(Configuration(
 ))
 ```
 
+With `.private`, records stay in each user's own iCloud, so neither you nor the ShipPulse
+app can read other users' data; dashboards and benchmarks need `.public`.
+
 Other options: `sampling`, `collectsDiagnostics`, `tracksRetention`,
 `automaticScreenTracking`.
 
