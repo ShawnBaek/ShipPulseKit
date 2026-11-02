@@ -104,6 +104,21 @@ Import replaces the whole schema of the target environment.
     SwiftUI.
 11. **Versions are `major.minor.patch`.** Release tags are plain three-number semver with no
     `v` prefix, like `0.1.0` and `0.2.0`. Never move a published tag.
+12. **Access control starts narrow.**
+    - Start at the narrowest level and widen only for a named user (the host app, or the
+      ShipPulse app through `ShipPulseKitCore`).
+    - Anything in `ShipPulseKitCore` that only the SDK uses is `package`.
+    - Public value types with an invariant use `private(set)` (or `package(set)` when the
+      SDK builds them) and enforce it in every `init`, including `init(from:)`.
+    - Every public type with instances is `Sendable` (caseless namespace enums such as
+      `Schema` have none). Every public function that touches shared state or
+      UI states its isolation: `@MainActor`, or `nonisolated` with a doc note that it is
+      safe from any thread. Pure functions on value types need no annotation.
+    - Public errors are structs with a nested `Code`, not enums, so new codes don't break
+      apps' exhaustive switches.
+    - Adding a public enum case or protocol requirement, or removing or narrowing a public
+      symbol, is an API change: a minor bump before 1.0, a major bump after.
+    - No `open`, and no public protocols for apps to implement, unless deliberate.
 
 ## Testing notes
 

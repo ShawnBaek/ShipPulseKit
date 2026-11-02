@@ -18,10 +18,10 @@ struct PendingRecord: Codable, Sendable, Equatable {
         /// The CloudKit record type name.
         var recordType: String {
             switch self {
-            case .metricSummary: Schema.RecordType.metricSummary
-            case .diagnosticPayload: Schema.RecordType.diagnosticPayload
-            case .install: Schema.RecordType.install
-            case .activeDay: Schema.RecordType.activeDay
+            case .metricSummary: Schema.RecordType.metricSummary.rawValue
+            case .diagnosticPayload: Schema.RecordType.diagnosticPayload.rawValue
+            case .install: Schema.RecordType.install.rawValue
+            case .activeDay: Schema.RecordType.activeDay.rawValue
             }
         }
     }
@@ -30,8 +30,10 @@ struct PendingRecord: Codable, Sendable, Equatable {
     var kind: Kind
     /// A deterministic name, so a retried upload overwrites instead of duplicating.
     var recordName: String
-    /// The record's fields, keyed by `Schema.Field` names.
-    var fields: [String: FieldValue]
+    /// The record's fields.
+    ///
+    /// On disk this is a JSON object keyed by the field names, as in 0.1.0.
+    var fields: [Schema.Field: FieldValue]
     /// When the record was queued. Drives upload order and expiry in ``DataContainer``.
     var createdAt: Date
 }
@@ -65,13 +67,13 @@ struct RecordContext: Sendable, Equatable {
     var deviceModel: String
 
     /// The context as record fields.
-    var fields: [String: FieldValue] {
+    var fields: [Schema.Field: FieldValue] {
         [
-            "bundleID": .string(bundleIdentifier),
-            "appVersion": .string(appVersion),
-            "build": .string(buildVersion),
-            "osVersion": .string(osVersion),
-            "device": .string(deviceModel),
+            .bundleID: .string(bundleIdentifier),
+            .appVersion: .string(appVersion),
+            .build: .string(buildVersion),
+            .osVersion: .string(osVersion),
+            .device: .string(deviceModel),
         ]
     }
 }

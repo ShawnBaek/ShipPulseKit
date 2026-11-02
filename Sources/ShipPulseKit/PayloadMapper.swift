@@ -30,14 +30,14 @@ enum PayloadMapper {
         now: Date
     ) -> PendingRecord {
         var fields = context.fields
-        fields[Schema.Field.installID] = .string(installID)
-        fields[Schema.Field.timeBegin] = .date(begin)
-        fields[Schema.Field.timeEnd] = .date(end)
-        fields[Schema.Field.schemaVersion] = .int(Int64(report.schemaVersion))
-        fields[Schema.Field.isTestFlight] = .int(report.isTestFlight ? 1 : 0)
-        fields[Schema.Field.lowPowerMode] = .int(report.lowPowerMode ? 1 : 0)
-        fields[Schema.Field.summary] = .bytes(compressed((try? JSONEncoder().encode(report)) ?? Data()))
-        if let rawJSON { fields[Schema.Field.report] = .bytes(compressed(rawJSON)) }
+        fields[.installID] = .string(installID)
+        fields[.timeBegin] = .date(begin)
+        fields[.timeEnd] = .date(end)
+        fields[.schemaVersion] = .int(Int64(report.schemaVersion))
+        fields[.isTestFlight] = .int(report.isTestFlight ? 1 : 0)
+        fields[.lowPowerMode] = .int(report.isLowPowerModeEnabled ? 1 : 0)
+        fields[.summary] = .bytes(compressed((try? JSONEncoder().encode(report)) ?? Data()))
+        if let rawJSON { fields[.report] = .bytes(compressed(rawJSON)) }
         // One record per install and window, so a redelivered report overwrites.
         let name = "summary-\(installID)-\(Int64(begin.timeIntervalSince1970))"
         return PendingRecord(kind: .metricSummary, recordName: name, fields: fields, createdAt: now)
@@ -61,7 +61,7 @@ enum PayloadMapper {
         json: Data,
         kind: String,
         durationMs: Double?,
-        extraFields: [String: FieldValue],
+        extraFields: [Schema.Field: FieldValue],
         isTestFlight: Bool,
         begin: Date,
         end: Date,
@@ -69,13 +69,13 @@ enum PayloadMapper {
         now: Date
     ) -> PendingRecord {
         var fields = context.fields.merging(extraFields) { _, new in new }
-        fields[Schema.Field.kind] = .string(kind)
-        if let durationMs { fields[Schema.Field.durationMs] = .double(durationMs) }
-        fields[Schema.Field.isTestFlight] = .int(isTestFlight ? 1 : 0)
-        fields[Schema.Field.timeBegin] = .date(begin)
-        fields[Schema.Field.timeEnd] = .date(end)
-        fields[Schema.Field.payload] = .bytes(compressed(json))
-        fields[Schema.Field.payloadEncoding] = .string("json+zlib")
+        fields[.kind] = .string(kind)
+        if let durationMs { fields[.durationMs] = .double(durationMs) }
+        fields[.isTestFlight] = .int(isTestFlight ? 1 : 0)
+        fields[.timeBegin] = .date(begin)
+        fields[.timeEnd] = .date(end)
+        fields[.payload] = .bytes(compressed(json))
+        fields[.payloadEncoding] = .string("json+zlib")
         let hash = String(Sampling.stableHash(json), radix: 16)
         let name = "diagnostic-\(context.bundleIdentifier)-\(context.buildVersion)-\(kind)-\(hash)"
         return PendingRecord(kind: .diagnosticPayload, recordName: name, fields: fields, createdAt: now)

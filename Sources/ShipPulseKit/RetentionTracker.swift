@@ -45,8 +45,8 @@ enum RetentionTracker {
             firstLaunch = now
             state.firstLaunch = now
             var fields = context.fields
-            fields["installID"] = .string(installID)
-            fields["firstLaunch"] = .date(firstLaunch)
+            fields[.installID] = .string(installID)
+            fields[.firstLaunch] = .date(firstLaunch)
             records.append(PendingRecord(kind: .install, recordName: "install-\(installID)", fields: fields, createdAt: now))
         }
 
@@ -54,9 +54,9 @@ enum RetentionTracker {
         guard state.lastActiveDay != day else { return (records, state) }
         state.lastActiveDay = day
         var fields = context.fields
-        fields["installID"] = .string(installID)
-        fields["day"] = .string(day)
-        fields["daysSinceInstall"] = .int(Int64(daysBetween(firstLaunch, now)))
+        fields[.installID] = .string(installID)
+        fields[.day] = .string(day)
+        fields[.daysSinceInstall] = .int(Int64(daysBetween(firstLaunch, now)))
         records.append(PendingRecord(kind: .activeDay, recordName: "active-\(installID)-\(day)", fields: fields, createdAt: now))
         return (records, state)
     }

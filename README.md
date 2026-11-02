@@ -40,8 +40,8 @@ Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-
    schema is in Production, nothing arrives: release builds keep records on the device for up
    to 30 days (at most 500 records), then drop the oldest.
 
-Without a usable container, `start()` throws `ShipPulseKitError.iCloudContainerUnavailable`
-instead of crashing. CloudKit raises an Objective-C exception in that case, which Swift
+Without a usable container, `start()` throws a `ShipPulseKitError` whose `code` is
+`.iCloudContainerUnavailable` instead of crashing. CloudKit raises an Objective-C exception in that case, which Swift
 can't catch; ShipPulseKit catches it and rethrows it as this error, so your app keeps
 running without metrics.
 
@@ -79,7 +79,7 @@ func application(_ application: UIApplication,
 That's all you need. Every MetricKit metric and diagnostic is collected, along with
 retention. UIKit screens are tracked automatically: ShipPulseKit swizzles
 `UIViewController.viewDidAppear(_:)` to report each content view controller's class name.
-Turn it off with `Configuration(automaticScreenTracking: false)`.
+Turn it off with `Configuration(tracksScreensAutomatically: false)`.
 
 ## Optional: screens and regions
 
@@ -110,8 +110,8 @@ neither you nor the ShipPulse app can read other users' data; dashboards and ben
 `.public`.
 
 Other options: `collectsMetrics`, `collectsDiagnostics`, `tracksRetention`, `sampling`,
-`diagnosticSampling`, `additionalStateDomains`, `automaticScreenTracking`, `maxQueueAge`
-(default 30 days) and `maxQueuedRecords` (default 500).
+`diagnosticSampling`, `additionalStateDomains`, `tracksScreensAutomatically`, `maxPendingRecordAge`
+(default 30 days) and `maxPendingRecords` (default 500).
 
 ## Data format
 

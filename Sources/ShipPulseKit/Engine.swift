@@ -29,7 +29,7 @@ final class Engine {
     ///     `UserDefaults.standard`; tests pass a temporary one.
     ///   - uploader: The transport. `nil` uses ``CloudKitUploader``.
     ///   - context: Device and app fields stamped on every record.
-    /// - Throws: ``ShipPulseKitError/iCloudContainerUnavailable(containerIdentifier:reason:)``
+    /// - Throws: ``ShipPulseKitError`` with code ``ShipPulseKitError/Code/iCloudContainerUnavailable``
     ///   when ``CloudKitUploader`` can't open the container.
     init(
         configuration: Configuration,
@@ -38,7 +38,7 @@ final class Engine {
         context: RecordContext = DeviceContext.current()
     ) throws(ShipPulseKitError) {
         self.configuration = configuration
-        self.container = container ?? DataContainer(maxAge: configuration.maxQueueAge, maxCount: configuration.maxQueuedRecords)
+        self.container = container ?? DataContainer(maxAge: configuration.maxPendingRecordAge, maxCount: configuration.maxPendingRecords)
         if let uploader {
             self.uploader = uploader
         } else {
@@ -102,7 +102,7 @@ final class Engine {
         self.collector = collector
         #endif
         #if canImport(UIKit) && !os(watchOS)
-        if configuration.automaticScreenTracking { AutomaticScreenTracking.install() }
+        if configuration.tracksScreensAutomatically { AutomaticScreenTracking.install() }
         #endif
         recordActivity()
         observeForeground()
@@ -147,7 +147,7 @@ final class Engine {
             guard Sampling.includes(installID: installID, rate: rate) else { return nil }
             // Readers divide counts by the rate to estimate the full population.
             var record = record
-            record.fields[Schema.Field.sampleRate] = .double(rate)
+            record.fields[.sampleRate] = .double(rate)
             return record
         }
         guard !admitted.isEmpty else { return }

@@ -6,6 +6,9 @@ import ShipPulseKitCore
 
 /// A measured region of animation or scrolling.
 ///
+/// Available on iOS and macOS, not on watchOS or visionOS, where MetricKit has no
+/// animation signposts.
+///
 /// Create one with ``ShipPulseKit/beginHitchInterval(_:category:)``. It emits a MetricKit
 /// animation signpost (`mxSignpostAnimationIntervalBegin`), so Apple reports hitch time,
 /// hitch ratio and run count for this name in the daily `SignpostIntervalMetric`. The
