@@ -297,3 +297,23 @@ private actor RecordingUploader: RecordUploading {
         #expect(await container.sampling().fetchedAt == now)
     }
 }
+
+@Suite struct ShipPulseKitErrorTests {
+    @Test func containerErrorCarriesDetails() {
+        let error = ShipPulseKitError.iCloudContainerUnavailable(containerIdentifier: "iCloud.com.example", reason: "no entitlement")
+        #expect(error.code == .iCloudContainerUnavailable)
+        #expect(error.containerIdentifier == "iCloud.com.example")
+        #expect(error.errorDescription?.contains("iCloud.com.example") == true)
+        #expect(error.errorDescription?.contains("no entitlement") == true)
+    }
+
+    @Test func codesMatchInASwitchWithDefault() {
+        let label: String = switch ShipPulseKitError.alreadyStarted.code {
+        case .iCloudContainerUnavailable: "container"
+        case .alreadyStarted: "started"
+        default: "other"
+        }
+        #expect(label == "started")
+        #expect(ShipPulseKitError.alreadyStarted.errorDescription == "ShipPulseKit is already running.")
+    }
+}

@@ -8,15 +8,18 @@ import Foundation
 ///
 /// Units are normalized: histograms in milliseconds, totals in seconds, sizes in megabytes.
 /// Keys come from ``MetricKey``.
+///
+/// Readers see it read-only; only ShipPulseKit, which fills it one metric at a time, can
+/// change it.
 public struct MetricSummary: Codable, Sendable, Equatable {
     /// Duration distributions, such as launch and hang times.
-    public var histograms: [String: Histogram]
+    public package(set) var histograms: [String: Histogram]
     /// Single numbers, such as foreground seconds or peak memory.
-    public var values: [String: Double]
+    public package(set) var values: [String: Double]
     /// Whole counts, such as terminations.
-    public var counts: [String: Int]
+    public package(set) var counts: [String: Int]
     /// Developer-defined signpost intervals, including hitch regions.
-    public var signposts: [SignpostSummary]
+    public package(set) var signposts: [SignpostSummary]
 
     /// Creates a summary.
     public init(histograms: [String: Histogram] = [:], values: [String: Double] = [:], counts: [String: Int] = [:], signposts: [SignpostSummary] = []) {
@@ -34,25 +37,25 @@ public struct MetricSummary: Codable, Sendable, Equatable {
 /// `MetricManager.logHandle(category:)`.
 public struct SignpostSummary: Codable, Sendable, Equatable {
     /// The signpost name.
-    public var name: String
+    public let name: String
     /// The signpost category.
-    public var category: String
+    public let category: String
     /// How many times the interval ran.
-    public var count: Int
+    public let count: Int
     /// The interval's durations.
-    public var duration: Histogram
+    public let duration: Histogram
     /// Average memory during the interval, in megabytes.
-    public var averageMemoryMB: Double?
+    public let averageMemoryMB: Double?
     /// CPU time spent in the interval, in seconds.
-    public var cpuSeconds: Double?
+    public let cpuSeconds: Double?
     /// Logical disk writes during the interval, in megabytes.
-    public var logicalWritesMB: Double?
+    public let logicalWritesMB: Double?
     /// Hitch time divided by animation time, for animation intervals.
-    public var hitchRatio: Double?
+    public let hitchRatio: Double?
     /// Total hitch time, in seconds, for animation intervals.
-    public var hitchSeconds: Double?
+    public let hitchSeconds: Double?
     /// Total animation time, in seconds, for animation intervals.
-    public var animationSeconds: Double?
+    public let animationSeconds: Double?
 
     /// Creates a signpost summary.
     public init(name: String, category: String, count: Int, duration: Histogram, averageMemoryMB: Double? = nil, cpuSeconds: Double? = nil, logicalWritesMB: Double? = nil, hitchRatio: Double? = nil, hitchSeconds: Double? = nil, animationSeconds: Double? = nil) {
@@ -74,13 +77,13 @@ public struct SignpostSummary: Codable, Sendable, Equatable {
 /// This is how ShipPulse attributes hitches, hangs and memory to a screen.
 public struct StateSummary: Codable, Sendable, Equatable {
     /// The state-reporting domain, such as ``Schema/screenDomain``.
-    public var domain: String
+    public let domain: String
     /// The state's label, such as a screen name.
-    public var label: String
+    public let label: String
     /// Time spent in the state, in seconds.
-    public var durationSeconds: Double
+    public let durationSeconds: Double
     /// Metrics measured while in the state.
-    public var metrics: MetricSummary
+    public let metrics: MetricSummary
 
     /// Creates a state summary.
     public init(domain: String, label: String, durationSeconds: Double, metrics: MetricSummary) {
@@ -97,19 +100,19 @@ public struct DailyReport: Codable, Sendable, Equatable {
     public static let currentSchemaVersion = 1
 
     /// The schema version the report was written with.
-    public var schemaVersion: Int
+    public let schemaVersion: Int
     /// Metrics for the whole day.
-    public var overall: MetricSummary
+    public let overall: MetricSummary
     /// Metrics per reported state, such as per screen.
-    public var states: [StateSummary]
+    public let states: [StateSummary]
     /// Whether Low Power Mode was on during the report.
-    public var lowPowerMode: Bool
+    public let lowPowerMode: Bool
     /// Whether the report came from a TestFlight build.
-    public var isTestFlight: Bool
+    public let isTestFlight: Bool
     /// Whether the day spans an app update, mixing two versions.
-    public var includesMultipleAppVersions: Bool
+    public let includesMultipleAppVersions: Bool
     /// Whether MetricKit dropped states because the app reported too many.
-    public var exceededStateLimit: Bool
+    public let exceededStateLimit: Bool
 
     /// Creates a report with the current schema version.
     public init(overall: MetricSummary, states: [StateSummary] = [], lowPowerMode: Bool = false, isTestFlight: Bool = false, includesMultipleAppVersions: Bool = false, exceededStateLimit: Bool = false) {

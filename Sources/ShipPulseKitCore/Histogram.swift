@@ -24,11 +24,30 @@ public struct Histogram: Codable, Sendable, Equatable {
     }
 
     /// The buckets, sorted by lower bound.
-    public var buckets: [Bucket]
+    ///
+    /// Read-only because ``percentile(_:)`` walks the buckets in order; an unsorted
+    /// assignment would return wrong values. Build a new histogram to change them.
+    public private(set) var buckets: [Bucket]
 
     /// Creates a histogram, sorting the buckets by lower bound.
     public init(buckets: [Bucket] = []) {
         self.buckets = buckets.sorted { $0.start < $1.start }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case buckets
+    }
+
+    /// Decodes a histogram, sorting the buckets like ``init(buckets:)`` does.
+    ///
+    /// Records written by other versions, or edited in CloudKit Console, may store the
+    /// buckets in any order.
+    ///
+    /// - Parameter decoder: The decoder to read from.
+    /// - Throws: `DecodingError` if the data isn't a histogram.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(buckets: try container.decode([Bucket].self, forKey: .buckets))
     }
 
     /// The number of samples across all buckets.

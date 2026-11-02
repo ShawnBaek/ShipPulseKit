@@ -58,6 +58,7 @@ extension View {
     ///   - name: The screen's name, or `nil` to use the source file.
     ///   - fileID: The caller's file. Leave the default.
     /// - Returns: A view that reports itself as the current screen when it appears.
+    @MainActor
     public func shipPulseScreen(_ name: String? = nil, fileID: String = #fileID) -> some View {
         modifier(ShipPulseScreenModifier(name: name ?? ScreenReporter.screenName(fromFileID: fileID)))
     }

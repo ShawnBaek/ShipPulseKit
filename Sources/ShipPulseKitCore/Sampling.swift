@@ -11,7 +11,7 @@ public enum Sampling {
     ///   - installID: The install's ID.
     ///   - rate: The share of installs that report, from `0` to `1`.
     /// - Returns: The same answer every time for the same install and rate.
-    public static func includes(installID: String, rate: Double) -> Bool {
+    package static func includes(installID: String, rate: Double) -> Bool {
         guard rate < 1 else { return true }
         guard rate > 0 else { return false }
         let bucket = stableHash(Data(installID.utf8)) % 10_000
@@ -41,7 +41,7 @@ public enum Sampling {
     ///
     /// - Parameter data: The bytes to hash.
     /// - Returns: A 64-bit hash.
-    public static func stableHash(_ data: Data) -> UInt64 {
+    package static func stableHash(_ data: Data) -> UInt64 {
         var hash: UInt64 = 0xcbf29ce484222325
         for byte in data {
             hash ^= UInt64(byte)

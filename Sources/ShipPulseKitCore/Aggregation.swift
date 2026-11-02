@@ -5,19 +5,22 @@ import Foundation
 ///
 /// Histograms are added bucket by bucket, cumulative values and counts are summed, and
 /// per-device snapshots keep their spread for percentiles.
+///
+/// The stored properties are read-only outside the type, so the counts always match what
+/// ``add(_:)`` merged.
 public struct GroupAggregate: Sendable, Equatable {
     /// The group's key, for example a device model or screen label.
-    public var key: String
+    public private(set) var key: String
     /// How many device reports were added.
-    public var deviceCount: Int
+    public private(set) var deviceCount: Int
     /// Merged histograms, keyed by ``MetricKey``.
-    public var histograms: [String: Histogram]
+    public private(set) var histograms: [String: Histogram]
     /// Summed cumulative values, such as foreground seconds.
-    public var totals: [String: Double]
+    public private(set) var totals: [String: Double]
     /// Summed counts, such as terminations.
-    public var counts: [String: Int]
+    public private(set) var counts: [String: Int]
     /// One value per device for snapshot metrics listed in ``MetricKey/distribution``.
-    public var samples: [String: [Double]]
+    public private(set) var samples: [String: [Double]]
 
     /// Creates an empty group.
     ///

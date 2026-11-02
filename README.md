@@ -40,8 +40,8 @@ Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-
    schema is in Production, nothing arrives: release builds keep records on the device for up
    to 30 days (at most 500 records), then drop the oldest.
 
-Without a usable container, `start()` throws `ShipPulseKitError.iCloudContainerUnavailable`
-instead of crashing. CloudKit raises an Objective-C exception in that case, which Swift
+Without a usable container, `start()` throws a `ShipPulseKitError` whose `code` is
+`.iCloudContainerUnavailable` instead of crashing. CloudKit raises an Objective-C exception in that case, which Swift
 can't catch; ShipPulseKit catches it and rethrows it as this error, so your app keeps
 running without metrics.
 

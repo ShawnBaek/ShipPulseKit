@@ -31,9 +31,9 @@ public enum ShipPulseKit {
     /// - Parameter configuration: Where records go and what is collected. The default
     ///   writes everything to the public database of the first container in the app's
     ///   entitlements.
-    /// - Throws: ``ShipPulseKitError/iCloudContainerUnavailable(containerIdentifier:reason:)``
+    /// - Throws: ``ShipPulseKitError`` with code ``ShipPulseKitError/Code/iCloudContainerUnavailable``
     ///   when the app has no usable iCloud container, or
-    ///   ``ShipPulseKitError/alreadyStarted`` on a second call.
+    ///   ``ShipPulseKitError/Code/alreadyStarted`` on a second call.
     @MainActor
     public static func start(_ configuration: Configuration = Configuration()) throws(ShipPulseKitError) {
         guard engine == nil else { throw .alreadyStarted }
@@ -58,13 +58,20 @@ public enum ShipPulseKit {
     /// `shipPulseScreen(_:fileID:)`. In UIKit,
     /// ``Configuration/automaticScreenTracking`` reports view controllers for you.
     ///
+    /// Main-actor isolated because screens change on the main thread, so transitions are
+    /// reported in the order the user saw them.
+    ///
     /// - Parameter name: The screen's name, or `nil` when no screen is showing.
+    @MainActor
     public static func reportScreen(_ name: String?) {
         ScreenReporter.shared.report(name)
     }
 
     #if canImport(MetricKit) && !os(watchOS) && !os(tvOS) && !os(visionOS)
     /// Runs work that is part of launch so MetricKit counts it in extended launch time.
+    ///
+    /// Available on iOS and macOS, not on watchOS or visionOS, where MetricKit has no
+    /// launch tasks.
     ///
     /// Use it for work the user waits on before the app is usable, such as loading the
     /// first feed:

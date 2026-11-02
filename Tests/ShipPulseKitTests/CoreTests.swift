@@ -3,6 +3,14 @@ import Testing
 import ShipPulseKitCore
 
 @Suite struct HistogramTests {
+    @Test func decodingSortsBuckets() throws {
+        let json = Data(#"{"buckets":[{"start":100,"end":200,"count":1},{"start":0,"end":100,"count":1}]}"#.utf8)
+        let histogram = try JSONDecoder().decode(Histogram.self, from: json)
+        #expect(histogram.buckets.map(\.start) == [0, 100])
+        #expect(histogram.percentile(0.25) == 50)
+        #expect(try JSONDecoder().decode(Histogram.self, from: JSONEncoder().encode(histogram)) == histogram)
+    }
+
     @Test func percentileInterpolatesInsideBucket() {
         let h = Histogram(buckets: [.init(start: 0, end: 100, count: 50), .init(start: 100, end: 200, count: 50)])
         #expect(h.percentile(0.5) == 100)

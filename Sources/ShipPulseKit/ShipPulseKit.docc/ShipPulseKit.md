@@ -22,7 +22,7 @@ do {
 
 Enable **Signing & Capabilities → iCloud → CloudKit** with a container before calling
 ``ShipPulseKit/ShipPulseKit/start(_:)``. Without a usable container it throws
-``ShipPulseKitError/iCloudContainerUnavailable(containerIdentifier:reason:)`` instead of
+``ShipPulseKitError`` with code ``ShipPulseKitError/Code/iCloudContainerUnavailable`` instead of
 crashing, and the app runs on without metrics.
 
 ### Screens
@@ -55,6 +55,9 @@ can't read. Records the device can't upload yet stay on disk for
 - ``ShipPulseKit/ShipPulseKit/trackLaunchTask(_:_:)``
 
 ### Hitch regions
+
+The hitch APIs exist on iOS and macOS only; the UIKit ones on iOS only. watchOS and
+visionOS have no MetricKit animation signposts, so these symbols aren't compiled there.
 
 - ``ShipPulseKit/ShipPulseKit/beginHitchInterval(_:category:)``
 - ``ShipPulseKit/ShipPulseKit/measureHitches(_:category:_:)``

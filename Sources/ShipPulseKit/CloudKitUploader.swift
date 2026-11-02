@@ -42,7 +42,7 @@ struct CloudKitUploader: RecordUploading {
     /// catches it and throws instead, so the host app never crashes.
     ///
     /// - Parameter configuration: Supplies the container identifier and database.
-    /// - Throws: ``ShipPulseKitError/iCloudContainerUnavailable(containerIdentifier:reason:)``.
+    /// - Throws: ``ShipPulseKitError`` with code ``ShipPulseKitError/Code/iCloudContainerUnavailable``.
     init(configuration: Configuration) throws(ShipPulseKitError) {
         var resolved: CKContainer?
         let exception = SPKCatchException {

@@ -29,7 +29,7 @@ final class Engine {
     ///     `UserDefaults.standard`; tests pass a temporary one.
     ///   - uploader: The transport. `nil` uses ``CloudKitUploader``.
     ///   - context: Device and app fields stamped on every record.
-    /// - Throws: ``ShipPulseKitError/iCloudContainerUnavailable(containerIdentifier:reason:)``
+    /// - Throws: ``ShipPulseKitError`` with code ``ShipPulseKitError/Code/iCloudContainerUnavailable``
     ///   when ``CloudKitUploader`` can't open the container.
     init(
         configuration: Configuration,
