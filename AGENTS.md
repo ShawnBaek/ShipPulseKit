@@ -87,12 +87,14 @@ Import replaces the whole schema of the target environment.
    - Keep entry points small: `start`, `flush`, `reportScreen`, `trackLaunchTask`, the hitch
      APIs, and the SwiftUI and UIKit extensions.
    - Update `README.md` when the API changes.
-8. **Swift 6 strict concurrency, proven by the compiler.**
-   - Prefer actors and `@MainActor`; use `Mutex` from `Synchronization` where state must be
-     shared outside an actor.
-   - Never `@unchecked Sendable`, `nonisolated(unsafe)` or `@preconcurrency`. Keep
-     non-Sendable framework objects (such as `UserDefaults`) inside one isolation domain
-     and pass only Sendable values out.
+8. **Swift 6 strict concurrency.**
+   - The compiler must prove every concurrency boundary. Don't use `@unchecked Sendable`,
+     `nonisolated(unsafe)` or `@preconcurrency` to silence a diagnostic.
+   - Prefer actors and `@MainActor`; use checked `Sendable` value types, `sending`
+     parameters and results, and `@Sendable` closures to move values across isolation.
+   - When a framework type isn't `Sendable` (for example `UserDefaults`), keep it inside
+     one actor or the main actor and pass only `Sendable` values out. For shared mutable
+     state that can't live in an actor, use `Mutex` from `Synchronization`.
 9. **Platform guards:** MetricKit is unavailable on watchOS and tvOS. On visionOS,
    `metricReports`, `MetricReport` and `logHandle(category:)` are unavailable, so metric
    mapping and `Hitches/*` also need `!os(visionOS)`. Build every platform before
