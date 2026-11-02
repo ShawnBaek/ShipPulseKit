@@ -79,7 +79,7 @@ func application(_ application: UIApplication,
 That's all you need. Every MetricKit metric and diagnostic is collected, along with
 retention. UIKit screens are tracked automatically: ShipPulseKit swizzles
 `UIViewController.viewDidAppear(_:)` to report each content view controller's class name.
-Turn it off with `Configuration(automaticScreenTracking: false)`.
+Turn it off with `Configuration(tracksScreensAutomatically: false)`.
 
 ## Optional: screens and regions
 
@@ -110,8 +110,8 @@ neither you nor the ShipPulse app can read other users' data; dashboards and ben
 `.public`.
 
 Other options: `collectsMetrics`, `collectsDiagnostics`, `tracksRetention`, `sampling`,
-`diagnosticSampling`, `additionalStateDomains`, `automaticScreenTracking`, `maxQueueAge`
-(default 30 days) and `maxQueuedRecords` (default 500).
+`diagnosticSampling`, `additionalStateDomains`, `tracksScreensAutomatically`, `maxPendingRecordAge`
+(default 30 days) and `maxPendingRecords` (default 500).
 
 ## Data format
 

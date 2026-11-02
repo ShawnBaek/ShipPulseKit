@@ -23,7 +23,7 @@ You get, with no other code:
 - **App-wide hitches from MetricKit:** hitch ratio, hitch time and animation time for
   everything Apple tracks by default (scrolling and system animations).
 - **Per-screen hitches in UIKit:** every content view controller is reported as a screen
-  when it appears (`automaticScreenTracking`, on by default). A `UIHostingController` is
+  when it appears (`tracksScreensAutomatically`, on by default). A `UIHostingController` is
   named after its root SwiftUI view.
 
 ## Level 2: name your SwiftUI screens (one modifier each)

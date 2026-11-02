@@ -119,8 +119,8 @@ struct CloudKitUploader: RecordUploading {
     func fetchSamplingConfig(bundleID: String) async -> RemoteSamplingConfig? {
         let id = CKRecord.ID(recordName: Schema.configRecordName(bundleID: bundleID))
         guard let record = try? await database.record(for: id) else { return nil }
-        let rate = record[Schema.Field.sampleRate] as? Double ?? 1
-        let diagnosticRate = record[Schema.Field.diagnosticSampleRate] as? Double ?? rate
+        let rate = record[Schema.Field.sampleRate.rawValue] as? Double ?? 1
+        let diagnosticRate = record[Schema.Field.diagnosticSampleRate.rawValue] as? Double ?? rate
         return RemoteSamplingConfig(sampleRate: rate, diagnosticSampleRate: diagnosticRate)
     }
 
@@ -130,7 +130,8 @@ struct CloudKitUploader: RecordUploading {
     /// - Returns: A record with the same type, name and fields.
     static func makeRecord(_ pending: PendingRecord) -> CKRecord {
         let record = CKRecord(recordType: pending.kind.recordType, recordID: CKRecord.ID(recordName: pending.recordName))
-        for (key, value) in pending.fields {
+        for (field, value) in pending.fields {
+            let key = field.rawValue
             switch value {
             case .string(let v): record[key] = v as CKRecordValue
             case .int(let v): record[key] = v as CKRecordValue

@@ -22,6 +22,9 @@ both sides compile the same definitions.
 
 - ``Metric``
 - ``MetricKey``
+- ``ForegroundTerminationReason``
+- ``BackgroundTerminationReason``
+- ``LocationAccuracy``
 - ``Histogram``
 
 ### Aggregation and sampling

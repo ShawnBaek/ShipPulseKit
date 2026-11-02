@@ -77,10 +77,10 @@ enum ReportMapper {
             states: report.stateEntries.map {
                 StateSummary(domain: $0.state.domain, label: $0.state.label, durationSeconds: seconds($0.state.duration), metrics: summary($0.values))
             },
-            lowPowerMode: env?.lowPowerModeEnabled ?? false,
+            isLowPowerModeEnabled: env?.lowPowerModeEnabled ?? false,
             isTestFlight: env?.isTestFlightApp ?? false,
             includesMultipleAppVersions: env?.includesMultipleApplicationVersions ?? false,
-            exceededStateLimit: env?.hasExceededStateLimit ?? false
+            hasExceededStateLimit: env?.hasExceededStateLimit ?? false
         )
     }
 
@@ -94,33 +94,33 @@ enum ReportMapper {
         var s = MetricSummary()
         for result in results {
             switch result {
-            case .timeToFirstDraw(let m): s.histograms[MetricKey.timeToFirstDraw] = histogram(m.histogram)
-            case .optimizedTimeToFirstDraw(let m): s.histograms[MetricKey.optimizedTimeToFirstDraw] = histogram(m.histogram)
-            case .extendedLaunch(let m): s.histograms[MetricKey.extendedLaunch] = histogram(m.histogram)
-            case .applicationResumeTime(let m): s.histograms[MetricKey.applicationResumeTime] = histogram(m.histogram)
-            case .hangTime(let m): s.histograms[MetricKey.hangTime] = histogram(m.histogram)
+            case .timeToFirstDraw(let m): s.histograms[.timeToFirstDraw] = histogram(m.histogram)
+            case .optimizedTimeToFirstDraw(let m): s.histograms[.optimizedTimeToFirstDraw] = histogram(m.histogram)
+            case .extendedLaunch(let m): s.histograms[.extendedLaunch] = histogram(m.histogram)
+            case .applicationResumeTime(let m): s.histograms[.applicationResumeTime] = histogram(m.histogram)
+            case .hangTime(let m): s.histograms[.hangTime] = histogram(m.histogram)
             case .hitchTime(let m):
-                s.values[MetricKey.hitchRatio] = m.ratio.value
-                s.values[MetricKey.hitchSeconds] = seconds(m.totalHitchTime)
-                s.values[MetricKey.animationSeconds] = seconds(m.totalAnimationTime)
+                s.values[.hitchRatio] = m.ratio.value
+                s.values[.hitchSeconds] = seconds(m.totalHitchTime)
+                s.values[.animationSeconds] = seconds(m.totalAnimationTime)
             case .foregroundTermination(let m):
-                s.counts[MetricKey.foregroundTermination("normal")] = m.normalTerminationCount
-                s.counts[MetricKey.foregroundTermination("memoryLimit")] = m.memoryLimitTerminationCount
-                s.counts[MetricKey.foregroundTermination("badAccess")] = m.badAccessTerminationCount
-                s.counts[MetricKey.foregroundTermination("abnormal")] = m.abnormalTerminationCount
-                s.counts[MetricKey.foregroundTermination("illegalInstruction")] = m.illegalInstructionTerminationCount
-                s.counts[MetricKey.foregroundTermination("watchdog")] = m.watchdogTerminationCount
+                s.counts[.foregroundTermination(.normal)] = m.normalTerminationCount
+                s.counts[.foregroundTermination(.memoryLimit)] = m.memoryLimitTerminationCount
+                s.counts[.foregroundTermination(.badAccess)] = m.badAccessTerminationCount
+                s.counts[.foregroundTermination(.abnormal)] = m.abnormalTerminationCount
+                s.counts[.foregroundTermination(.illegalInstruction)] = m.illegalInstructionTerminationCount
+                s.counts[.foregroundTermination(.watchdog)] = m.watchdogTerminationCount
             case .backgroundTermination(let m):
-                s.counts[MetricKey.backgroundTermination("normal")] = m.normalTerminationCount
-                s.counts[MetricKey.backgroundTermination("memoryLimit")] = m.memoryLimitTerminationCount
-                s.counts[MetricKey.backgroundTermination("highCPU")] = m.highCPUTerminationCount
-                s.counts[MetricKey.backgroundTermination("systemPressure")] = m.systemPressureTerminationCount
-                s.counts[MetricKey.backgroundTermination("badAccess")] = m.badAccessTerminationCount
-                s.counts[MetricKey.backgroundTermination("abnormal")] = m.abnormalTerminationCount
-                s.counts[MetricKey.backgroundTermination("illegalInstruction")] = m.illegalInstructionTerminationCount
-                s.counts[MetricKey.backgroundTermination("watchdog")] = m.watchdogTerminationCount
-                s.counts[MetricKey.backgroundTermination("fileLock")] = m.fileLockTerminationCount
-                s.counts[MetricKey.backgroundTermination("taskTimeout")] = m.taskTimeoutTerminationCount
+                s.counts[.backgroundTermination(.normal)] = m.normalTerminationCount
+                s.counts[.backgroundTermination(.memoryLimit)] = m.memoryLimitTerminationCount
+                s.counts[.backgroundTermination(.highCPU)] = m.highCPUTerminationCount
+                s.counts[.backgroundTermination(.systemPressure)] = m.systemPressureTerminationCount
+                s.counts[.backgroundTermination(.badAccess)] = m.badAccessTerminationCount
+                s.counts[.backgroundTermination(.abnormal)] = m.abnormalTerminationCount
+                s.counts[.backgroundTermination(.illegalInstruction)] = m.illegalInstructionTerminationCount
+                s.counts[.backgroundTermination(.watchdog)] = m.watchdogTerminationCount
+                s.counts[.backgroundTermination(.fileLock)] = m.fileLockTerminationCount
+                s.counts[.backgroundTermination(.taskTimeout)] = m.taskTimeoutTerminationCount
             case .signpostInterval(let m):
                 s.signposts.append(SignpostSummary(
                     name: m.signpostName,
@@ -135,44 +135,44 @@ enum ReportMapper {
                     animationSeconds: m.totalAnimationTime.map(seconds)
                 ))
             case .locationActivityTime(let m):
-                s.values[MetricKey.locationSeconds("bestAccuracyForNavigation")] = seconds(m.bestAccuracyForNavigation)
-                s.values[MetricKey.locationSeconds("bestAccuracy")] = seconds(m.bestAccuracy)
-                s.values[MetricKey.locationSeconds("tenMeters")] = seconds(m.tenMeters)
-                s.values[MetricKey.locationSeconds("oneHundredMeters")] = seconds(m.oneHundredMeter)
-                s.values[MetricKey.locationSeconds("oneKilometer")] = seconds(m.oneKilometer)
-                s.values[MetricKey.locationSeconds("threeKilometers")] = seconds(m.threeKilometers)
-                s.values[MetricKey.locationSeconds("reducedAccuracy")] = seconds(m.reducedAccuracy)
-            case .totalForegroundTime(let m): s.values[MetricKey.foregroundSeconds] = seconds(m.value)
-            case .totalBackgroundTime(let m): s.values[MetricKey.backgroundSeconds] = seconds(m.value)
-            case .totalBackgroundAudioTime(let m): s.values[MetricKey.backgroundAudioSeconds] = seconds(m.value)
-            case .totalBackgroundLocationTime(let m): s.values[MetricKey.backgroundLocationSeconds] = seconds(m.value)
-            case .cpuTime(let m): s.values[MetricKey.cpuSeconds] = seconds(m.value)
-            case .cpuInstructionsCount(let m): s.counts[MetricKey.cpuInstructions] = m.value
-            case .gpuTime(let m): s.values[MetricKey.gpuSeconds] = seconds(m.value)
-            case .peakMemory(let m): s.values[MetricKey.peakMemoryMB] = megabytes(m.value)
-            case .suspendedMemory(let m): s.values[MetricKey.suspendedMemoryMB] = megabytes(m.value.average)
-            case .totalWiFiUpload(let m): s.values[MetricKey.wifiUploadMB] = megabytes(m.value)
-            case .totalWiFiDownload(let m): s.values[MetricKey.wifiDownloadMB] = megabytes(m.value)
-            case .totalCellularUpload(let m): s.values[MetricKey.cellularUploadMB] = megabytes(m.value)
-            case .totalCellularDownload(let m): s.values[MetricKey.cellularDownloadMB] = megabytes(m.value)
-            case .logicalDiskWrites(let m): s.values[MetricKey.logicalDiskWritesMB] = megabytes(m.value)
-            case .pixelLuminance(let m): s.values[MetricKey.pixelLuminance] = m.value.average.value
-            case .cellularConditionTime(let m): s.histograms[MetricKey.cellularConditionBars] = histogram(m.histogram)
+                s.values[.locationSeconds(.bestAccuracyForNavigation)] = seconds(m.bestAccuracyForNavigation)
+                s.values[.locationSeconds(.bestAccuracy)] = seconds(m.bestAccuracy)
+                s.values[.locationSeconds(.tenMeters)] = seconds(m.tenMeters)
+                s.values[.locationSeconds(.oneHundredMeters)] = seconds(m.oneHundredMeter)
+                s.values[.locationSeconds(.oneKilometer)] = seconds(m.oneKilometer)
+                s.values[.locationSeconds(.threeKilometers)] = seconds(m.threeKilometers)
+                s.values[.locationSeconds(.reducedAccuracy)] = seconds(m.reducedAccuracy)
+            case .totalForegroundTime(let m): s.values[.foregroundSeconds] = seconds(m.value)
+            case .totalBackgroundTime(let m): s.values[.backgroundSeconds] = seconds(m.value)
+            case .totalBackgroundAudioTime(let m): s.values[.backgroundAudioSeconds] = seconds(m.value)
+            case .totalBackgroundLocationTime(let m): s.values[.backgroundLocationSeconds] = seconds(m.value)
+            case .cpuTime(let m): s.values[.cpuSeconds] = seconds(m.value)
+            case .cpuInstructionsCount(let m): s.counts[.cpuInstructions] = m.value
+            case .gpuTime(let m): s.values[.gpuSeconds] = seconds(m.value)
+            case .peakMemory(let m): s.values[.peakMemoryMB] = megabytes(m.value)
+            case .suspendedMemory(let m): s.values[.suspendedMemoryMB] = megabytes(m.value.average)
+            case .totalWiFiUpload(let m): s.values[.wifiUploadMB] = megabytes(m.value)
+            case .totalWiFiDownload(let m): s.values[.wifiDownloadMB] = megabytes(m.value)
+            case .totalCellularUpload(let m): s.values[.cellularUploadMB] = megabytes(m.value)
+            case .totalCellularDownload(let m): s.values[.cellularDownloadMB] = megabytes(m.value)
+            case .logicalDiskWrites(let m): s.values[.logicalDiskWritesMB] = megabytes(m.value)
+            case .pixelLuminance(let m): s.values[.pixelLuminance] = m.value.average.value
+            case .cellularConditionTime(let m): s.histograms[.cellularConditionBars] = histogram(m.histogram)
             case .totalFileCount(let m):
-                s.counts[MetricKey.binaryFileCount] = m.binaryFileCount
-                s.counts[MetricKey.dataFileCount] = m.dataFileCount
+                s.counts[.binaryFileCount] = m.binaryFileCount
+                s.counts[.dataFileCount] = m.dataFileCount
             case .totalFileSize(let m):
-                s.values[MetricKey.binaryFileSizeMB] = megabytes(m.binaryFileSize)
-                s.values[MetricKey.dataFileSizeMB] = megabytes(m.dataFileSize)
-                s.values[MetricKey.cacheFolderSizeMB] = megabytes(m.cacheFolderSize)
-                s.values[MetricKey.cloneSizeMB] = megabytes(m.cloneSize)
+                s.values[.binaryFileSizeMB] = megabytes(m.binaryFileSize)
+                s.values[.dataFileSizeMB] = megabytes(m.dataFileSize)
+                s.values[.cacheFolderSizeMB] = megabytes(m.cacheFolderSize)
+                s.values[.cloneSizeMB] = megabytes(m.cloneSize)
             case .totalDiskSpaceCapacity(let m):
-                s.values[MetricKey.diskCapacityMB] = megabytes(m.capacity)
-                s.values[MetricKey.diskUsedMB] = megabytes(m.spaceUsed)
+                s.values[.diskCapacityMB] = megabytes(m.capacity)
+                s.values[.diskUsedMB] = megabytes(m.spaceUsed)
             case .metalFrameRate(let m):
-                s.values[MetricKey.metalFPS(layer: m.layerName)] = m.framesPerSecond.converted(to: .hertz).value
-                s.counts[MetricKey.metalFrames(layer: m.layerName)] = m.frameCount
-                s.values[MetricKey.metalActiveSeconds(layer: m.layerName)] = seconds(m.activeDrawingDuration)
+                s.values[.metalFPS(layer: m.layerName)] = m.framesPerSecond.converted(to: .hertz).value
+                s.counts[.metalFrames(layer: m.layerName)] = m.frameCount
+                s.values[.metalActiveSeconds(layer: m.layerName)] = seconds(m.activeDrawingDuration)
             @unknown default:
                 // A metric added after this SDK version. It is still in the raw report JSON.
                 break
@@ -188,18 +188,18 @@ enum ReportMapper {
     /// - Parameter report: The MetricKit diagnostic.
     /// - Returns: The kind, the duration in milliseconds when the kind has one, and
     ///   kind-specific fields.
-    static func diagnosticFields(_ report: DiagnosticReport) -> (kind: String, durationMs: Double?, extra: [String: FieldValue]) {
+    static func diagnosticFields(_ report: DiagnosticReport) -> (kind: String, durationMs: Double?, extra: [Schema.Field: FieldValue]) {
         switch report.result {
         case .crash(let d):
-            var extra: [String: FieldValue] = [:]
-            if let category = d.terminationCategory { extra[Schema.Field.terminationCategory] = .string(category.rawValue) }
-            if let signal = d.signal { extra[Schema.Field.signal] = .int(Int64(signal)) }
-            if let type = d.exceptionType { extra[Schema.Field.exceptionType] = .int(Int64(type)) }
+            var extra: [Schema.Field: FieldValue] = [:]
+            if let category = d.terminationCategory { extra[.terminationCategory] = .string(category.rawValue) }
+            if let signal = d.signal { extra[.signal] = .int(Int64(signal)) }
+            if let type = d.exceptionType { extra[.exceptionType] = .int(Int64(type)) }
             return ("crash", nil, extra)
         case .hang(let d): return ("hang", milliseconds(d.hangDuration), [:])
         case .appLaunch(let d): return ("appLaunch", milliseconds(d.launchDuration), [:])
         case .cpuException(let d): return ("cpuException", milliseconds(d.totalCPUTime), [:])
-        case .diskWriteException(let d): return ("diskWriteException", nil, [Schema.Field.writesMB: .double(megabytes(d.totalBytesWritten))])
+        case .diskWriteException(let d): return ("diskWriteException", nil, [.writesMB: .double(megabytes(d.totalBytesWritten))])
         case .memoryException: return ("memoryException", nil, [:])
         @unknown default: return ("unknown", nil, [:])
         }

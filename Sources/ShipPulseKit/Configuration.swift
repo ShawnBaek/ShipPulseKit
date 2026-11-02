@@ -51,13 +51,50 @@ public struct Configuration: Sendable, Equatable {
     ///
     /// When `true`, each content view controller's class name becomes the screen when it
     /// appears, so per-screen metrics work with no code beyond ``ShipPulseKit/start(_:)``.
-    public var automaticScreenTracking: Bool
-    /// How long a queued record waits before it is dropped instead of uploaded.
-    public var maxQueueAge: TimeInterval
-    /// The most records kept on disk while offline. The oldest are dropped first.
-    public var maxQueuedRecords: Int
+    public var tracksScreensAutomatically: Bool
+    /// How long a pending record waits for upload before it is dropped. The default is 30
+    /// days.
+    public var maxPendingRecordAge: TimeInterval
+    /// The most pending records kept on the device while uploads can't happen. The oldest
+    /// are dropped first. The default is 500.
+    public var maxPendingRecords: Int
 
     /// Creates a configuration. Every parameter matches the property of the same name.
+    public init(
+        containerIdentifier: String? = nil,
+        database: Database = .public,
+        collectsMetrics: Bool = true,
+        collectsDiagnostics: Bool = true,
+        tracksRetention: Bool = true,
+        sampling: SamplingMode = .automatic,
+        diagnosticSampling: SamplingMode = .automatic,
+        additionalStateDomains: Set<String> = [],
+        tracksScreensAutomatically: Bool = true,
+        maxPendingRecordAge: TimeInterval = 30 * 24 * 60 * 60,
+        maxPendingRecords: Int = 500
+    ) {
+        self.containerIdentifier = containerIdentifier
+        self.database = database
+        self.collectsMetrics = collectsMetrics
+        self.collectsDiagnostics = collectsDiagnostics
+        self.tracksRetention = tracksRetention
+        self.sampling = sampling
+        self.diagnosticSampling = diagnosticSampling
+        self.additionalStateDomains = additionalStateDomains
+        self.tracksScreensAutomatically = tracksScreensAutomatically
+        self.maxPendingRecordAge = maxPendingRecordAge
+        self.maxPendingRecords = maxPendingRecords
+    }
+}
+
+// 0.1.0 names, kept so host apps get a rename fix-it instead of an error.
+extension Configuration {
+    /// Creates a configuration with the 0.1.0 parameter names.
+    ///
+    /// `@_disfavoredOverload` keeps calls that use none of the old names on the current
+    /// initializer instead of making them ambiguous.
+    @available(*, deprecated, message: "Use automaticScreenTracking → tracksScreensAutomatically, maxQueueAge → maxPendingRecordAge, maxQueuedRecords → maxPendingRecords.")
+    @_disfavoredOverload
     public init(
         containerIdentifier: String? = nil,
         database: Database = .public,
@@ -71,17 +108,40 @@ public struct Configuration: Sendable, Equatable {
         maxQueueAge: TimeInterval = 30 * 24 * 60 * 60,
         maxQueuedRecords: Int = 500
     ) {
-        self.containerIdentifier = containerIdentifier
-        self.database = database
-        self.collectsMetrics = collectsMetrics
-        self.collectsDiagnostics = collectsDiagnostics
-        self.tracksRetention = tracksRetention
-        self.sampling = sampling
-        self.diagnosticSampling = diagnosticSampling
-        self.additionalStateDomains = additionalStateDomains
-        self.automaticScreenTracking = automaticScreenTracking
-        self.maxQueueAge = maxQueueAge
-        self.maxQueuedRecords = maxQueuedRecords
+        self.init(
+            containerIdentifier: containerIdentifier,
+            database: database,
+            collectsMetrics: collectsMetrics,
+            collectsDiagnostics: collectsDiagnostics,
+            tracksRetention: tracksRetention,
+            sampling: sampling,
+            diagnosticSampling: diagnosticSampling,
+            additionalStateDomains: additionalStateDomains,
+            tracksScreensAutomatically: automaticScreenTracking,
+            maxPendingRecordAge: maxQueueAge,
+            maxPendingRecords: maxQueuedRecords
+        )
+    }
+
+    /// The 0.1.0 name of ``tracksScreensAutomatically``.
+    @available(*, deprecated, renamed: "tracksScreensAutomatically")
+    public var automaticScreenTracking: Bool {
+        get { tracksScreensAutomatically }
+        set { tracksScreensAutomatically = newValue }
+    }
+
+    /// The 0.1.0 name of ``maxPendingRecordAge``.
+    @available(*, deprecated, renamed: "maxPendingRecordAge")
+    public var maxQueueAge: TimeInterval {
+        get { maxPendingRecordAge }
+        set { maxPendingRecordAge = newValue }
+    }
+
+    /// The 0.1.0 name of ``maxPendingRecords``.
+    @available(*, deprecated, renamed: "maxPendingRecords")
+    public var maxQueuedRecords: Int {
+        get { maxPendingRecords }
+        set { maxPendingRecords = newValue }
     }
 }
 
@@ -91,6 +151,18 @@ public enum SamplingMode: Sendable, Equatable {
     ///
     /// Every install reports while the app is small, and fewer do as it grows.
     case automatic
-    /// A fixed share of installs, from `0` to `1`.
-    case fixed(Double)
+    /// A fixed share of installs.
+    ///
+    /// - Parameter rate: The share of installs that report, from `0` to `1`. Values
+    ///   outside that range are clamped.
+    case fixed(rate: Double)
+
+    /// The 0.1.0 spelling of ``fixed(rate:)``.
+    ///
+    /// - Parameter rate: The share of installs that report, from `0` to `1`.
+    /// - Returns: ``fixed(rate:)``.
+    @available(*, deprecated, renamed: "fixed(rate:)")
+    public static func fixed(_ rate: Double) -> SamplingMode {
+        .fixed(rate: rate)
+    }
 }

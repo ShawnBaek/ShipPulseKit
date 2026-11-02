@@ -13,16 +13,16 @@ import Foundation
 /// change it.
 public struct MetricSummary: Codable, Sendable, Equatable {
     /// Duration distributions, such as launch and hang times.
-    public package(set) var histograms: [String: Histogram]
+    public package(set) var histograms: [MetricKey: Histogram]
     /// Single numbers, such as foreground seconds or peak memory.
-    public package(set) var values: [String: Double]
+    public package(set) var values: [MetricKey: Double]
     /// Whole counts, such as terminations.
-    public package(set) var counts: [String: Int]
+    public package(set) var counts: [MetricKey: Int]
     /// Developer-defined signpost intervals, including hitch regions.
     public package(set) var signposts: [SignpostSummary]
 
     /// Creates a summary.
-    public init(histograms: [String: Histogram] = [:], values: [String: Double] = [:], counts: [String: Int] = [:], signposts: [SignpostSummary] = []) {
+    public init(histograms: [MetricKey: Histogram] = [:], values: [MetricKey: Double] = [:], counts: [MetricKey: Int] = [:], signposts: [SignpostSummary] = []) {
         self.histograms = histograms
         self.values = values
         self.counts = counts
@@ -106,92 +106,58 @@ public struct DailyReport: Codable, Sendable, Equatable {
     /// Metrics per reported state, such as per screen.
     public let states: [StateSummary]
     /// Whether Low Power Mode was on during the report.
-    public let lowPowerMode: Bool
+    public let isLowPowerModeEnabled: Bool
     /// Whether the report came from a TestFlight build.
     public let isTestFlight: Bool
     /// Whether the day spans an app update, mixing two versions.
     public let includesMultipleAppVersions: Bool
     /// Whether MetricKit dropped states because the app reported too many.
-    public let exceededStateLimit: Bool
+    public let hasExceededStateLimit: Bool
+
+    // The JSON keys are the 0.1.0 property names; renaming a property must not change them.
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, overall, states, isTestFlight, includesMultipleAppVersions
+        case isLowPowerModeEnabled = "lowPowerMode"
+        case hasExceededStateLimit = "exceededStateLimit"
+    }
 
     /// Creates a report with the current schema version.
-    public init(overall: MetricSummary, states: [StateSummary] = [], lowPowerMode: Bool = false, isTestFlight: Bool = false, includesMultipleAppVersions: Bool = false, exceededStateLimit: Bool = false) {
+    ///
+    /// - Parameters:
+    ///   - overall: Metrics for the whole day.
+    ///   - states: Metrics per reported state, such as per screen.
+    ///   - isLowPowerModeEnabled: Whether Low Power Mode was on.
+    ///   - isTestFlight: Whether the report came from a TestFlight build.
+    ///   - includesMultipleAppVersions: Whether the day spans an app update.
+    ///   - hasExceededStateLimit: Whether MetricKit dropped states.
+    public init(overall: MetricSummary, states: [StateSummary] = [], isLowPowerModeEnabled: Bool = false, isTestFlight: Bool = false, includesMultipleAppVersions: Bool = false, hasExceededStateLimit: Bool = false) {
         self.schemaVersion = Self.currentSchemaVersion
         self.overall = overall
         self.states = states
-        self.lowPowerMode = lowPowerMode
+        self.isLowPowerModeEnabled = isLowPowerModeEnabled
         self.isTestFlight = isTestFlight
         self.includesMultipleAppVersions = includesMultipleAppVersions
-        self.exceededStateLimit = exceededStateLimit
+        self.hasExceededStateLimit = hasExceededStateLimit
     }
 }
 
-/// Storage keys for every MetricKit metric in ``MetricSummary``.
-///
-/// Group aggregation sums cumulative values and takes percentiles over the per-device
-/// snapshots in ``distribution``.
-public enum MetricKey {
-    // Launch: histograms in milliseconds.
-    public static let timeToFirstDraw = "timeToFirstDraw"
-    public static let optimizedTimeToFirstDraw = "optimizedTimeToFirstDraw"
-    public static let extendedLaunch = "extendedLaunch"
-    public static let applicationResumeTime = "applicationResumeTime"
-    // Responsiveness and animation.
-    public static let hangTime = "hangTime"
-    public static let hitchRatio = "hitchTime.ratio"
-    public static let hitchSeconds = "hitchTime.totalSeconds"
-    public static let animationSeconds = "hitchTime.animationSeconds"
-    // Run time (seconds).
-    public static let foregroundSeconds = "totalForegroundTime.seconds"
-    public static let backgroundSeconds = "totalBackgroundTime.seconds"
-    public static let backgroundAudioSeconds = "totalBackgroundAudioTime.seconds"
-    public static let backgroundLocationSeconds = "totalBackgroundLocationTime.seconds"
-    // CPU / GPU.
-    public static let cpuSeconds = "cpuTime.seconds"
-    public static let cpuInstructions = "cpuInstructionsCount"
-    public static let gpuSeconds = "gpuTime.seconds"
-    // Memory (MB).
-    public static let peakMemoryMB = "peakMemory.mb"
-    public static let suspendedMemoryMB = "suspendedMemory.averageMB"
-    // Network (MB).
-    public static let wifiUploadMB = "totalWiFiUpload.mb"
-    public static let wifiDownloadMB = "totalWiFiDownload.mb"
-    public static let cellularUploadMB = "totalCellularUpload.mb"
-    public static let cellularDownloadMB = "totalCellularDownload.mb"
-    public static let cellularConditionBars = "cellularConditionTime"
-    // Disk (MB unless noted).
-    public static let logicalDiskWritesMB = "logicalDiskWrites.mb"
-    public static let binaryFileCount = "totalFileCount.binary"
-    public static let dataFileCount = "totalFileCount.data"
-    public static let binaryFileSizeMB = "totalFileSize.binaryMB"
-    public static let dataFileSizeMB = "totalFileSize.dataMB"
-    public static let cacheFolderSizeMB = "totalFileSize.cacheMB"
-    public static let cloneSizeMB = "totalFileSize.cloneMB"
-    public static let diskCapacityMB = "totalDiskSpace.capacityMB"
-    public static let diskUsedMB = "totalDiskSpace.usedMB"
-    // Display.
-    public static let pixelLuminance = "pixelLuminance.average"
-    // Location accuracy time (seconds).
-    public static func locationSeconds(_ accuracy: String) -> String { "locationActivityTime.\(accuracy)" }
-    // Terminations (counts).
-    public static func foregroundTermination(_ reason: String) -> String { "foregroundTermination.\(reason)" }
-    public static func backgroundTermination(_ reason: String) -> String { "backgroundTermination.\(reason)" }
-    // Metal, one set per layer.
-    public static func metalFPS(layer: String) -> String { "metalFrameRate[\(layer)].fps" }
-    public static func metalFrames(layer: String) -> String { "metalFrameRate[\(layer)].frames" }
-    public static func metalActiveSeconds(layer: String) -> String { "metalFrameRate[\(layer)].activeSeconds" }
-
-    /// Per-device snapshot keys. Groups report their spread, not their sum.
-    public static let distribution: Set<String> = [
-        peakMemoryMB, suspendedMemoryMB, pixelLuminance, hitchRatio,
-        binaryFileSizeMB, dataFileSizeMB, cacheFolderSizeMB, cloneSizeMB, diskCapacityMB, diskUsedMB,
-    ]
-
-    /// Whether a key holds a per-device snapshot, including per-layer Metal frame rates.
+// 0.1.0 names, kept so the ShipPulse app gets a rename fix-it instead of an error.
+extension DailyReport {
+    /// Creates a report with the 0.1.0 parameter names.
     ///
-    /// - Parameter key: A storage key.
-    /// - Returns: `true` for snapshot keys.
-    public static func isDistribution(_ key: String) -> Bool {
-        distribution.contains(key) || key.hasSuffix("].fps")
+    /// `@_disfavoredOverload` keeps calls that use none of the old names on the current
+    /// initializer instead of making them ambiguous.
+    @available(*, deprecated, message: "Use lowPowerMode → isLowPowerModeEnabled, exceededStateLimit → hasExceededStateLimit.")
+    @_disfavoredOverload
+    public init(overall: MetricSummary, states: [StateSummary] = [], lowPowerMode: Bool = false, isTestFlight: Bool = false, includesMultipleAppVersions: Bool = false, exceededStateLimit: Bool = false) {
+        self.init(overall: overall, states: states, isLowPowerModeEnabled: lowPowerMode, isTestFlight: isTestFlight, includesMultipleAppVersions: includesMultipleAppVersions, hasExceededStateLimit: exceededStateLimit)
     }
+
+    /// The 0.1.0 name of ``isLowPowerModeEnabled``.
+    @available(*, deprecated, renamed: "isLowPowerModeEnabled")
+    public var lowPowerMode: Bool { isLowPowerModeEnabled }
+
+    /// The 0.1.0 name of ``hasExceededStateLimit``.
+    @available(*, deprecated, renamed: "hasExceededStateLimit")
+    public var exceededStateLimit: Bool { hasExceededStateLimit }
 }

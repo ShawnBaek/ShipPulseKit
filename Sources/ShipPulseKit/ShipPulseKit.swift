@@ -56,7 +56,7 @@ public enum ShipPulseKit {
     /// MetricKit then breaks hitches, hangs, memory and every other metric down by screen,
     /// so ShipPulse can show which screen hitches. In SwiftUI, prefer
     /// `shipPulseScreen(_:fileID:)`. In UIKit,
-    /// ``Configuration/automaticScreenTracking`` reports view controllers for you.
+    /// ``Configuration/tracksScreensAutomatically`` reports view controllers for you.
     ///
     /// Main-actor isolated because screens change on the main thread, so transitions are
     /// reported in the order the user saw them.
@@ -85,17 +85,17 @@ public enum ShipPulseKit {
     /// Before ``start(_:)`` succeeds, the operation simply runs untracked.
     ///
     /// - Parameters:
-    ///   - id: A stable name for the task, shown in ShipPulse.
+    ///   - name: A stable name for the task, shown in ShipPulse.
     ///   - operation: The launch work.
     /// - Returns: The operation's result.
     /// - Throws: Whatever `operation` throws.
     @MainActor
     public static func trackLaunchTask<Result, Failure: Error>(
-        _ id: String,
+        _ name: String,
         _ operation: () async throws(Failure) -> Result
     ) async throws(Failure) -> Result {
         guard let manager = engine?.metricManager else { return try await operation() }
-        return try await manager.trackLaunchTask(id: LaunchTaskID(rawValue: id), operation)
+        return try await manager.trackLaunchTask(id: LaunchTaskID(rawValue: name), operation)
     }
     #endif
 }

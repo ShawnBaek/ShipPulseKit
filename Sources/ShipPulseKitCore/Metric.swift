@@ -152,47 +152,50 @@ public enum Metric: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// Reasons a ``foregroundTermination`` is broken down by.
-    public static let foregroundTerminationReasons = ["normal", "memoryLimit", "badAccess", "abnormal", "illegalInstruction", "watchdog"]
-    /// Reasons a ``backgroundTermination`` is broken down by.
-    public static let backgroundTerminationReasons = ["normal", "memoryLimit", "highCPU", "systemPressure", "badAccess", "abnormal", "illegalInstruction", "watchdog", "fileLock", "taskTimeout"]
-    /// Accuracy levels ``locationActivityTime`` is broken down by.
-    public static let locationAccuracies = ["bestAccuracyForNavigation", "bestAccuracy", "tenMeters", "oneHundredMeters", "oneKilometer", "threeKilometers", "reducedAccuracy"]
+    /// The 0.1.0 list of foreground termination reasons.
+    @available(*, deprecated, message: "Use ForegroundTerminationReason.allCases.")
+    public static var foregroundTerminationReasons: [String] { ForegroundTerminationReason.allCases.map(\.rawValue) }
+    /// The 0.1.0 list of background termination reasons.
+    @available(*, deprecated, message: "Use BackgroundTerminationReason.allCases.")
+    public static var backgroundTerminationReasons: [String] { BackgroundTerminationReason.allCases.map(\.rawValue) }
+    /// The 0.1.0 list of location accuracies.
+    @available(*, deprecated, message: "Use LocationAccuracy.allCases.")
+    public static var locationAccuracies: [String] { LocationAccuracy.allCases.map(\.rawValue) }
 
     /// The keys this metric writes into ``MetricSummary``.
     ///
     /// ``metalFrameRate`` keys depend on layer names and ``signpostInterval`` lives in
     /// ``MetricSummary/signposts``, so both return an empty list.
-    public var storageKeys: [String] {
+    public var storageKeys: [MetricKey] {
         switch self {
-        case .timeToFirstDraw: [MetricKey.timeToFirstDraw]
-        case .optimizedTimeToFirstDraw: [MetricKey.optimizedTimeToFirstDraw]
-        case .extendedLaunch: [MetricKey.extendedLaunch]
-        case .applicationResumeTime: [MetricKey.applicationResumeTime]
-        case .hangTime: [MetricKey.hangTime]
-        case .hitchTime: [MetricKey.hitchRatio, MetricKey.hitchSeconds, MetricKey.animationSeconds]
-        case .foregroundTermination: Self.foregroundTerminationReasons.map(MetricKey.foregroundTermination)
-        case .backgroundTermination: Self.backgroundTerminationReasons.map(MetricKey.backgroundTermination)
-        case .totalForegroundTime: [MetricKey.foregroundSeconds]
-        case .totalBackgroundTime: [MetricKey.backgroundSeconds]
-        case .totalBackgroundAudioTime: [MetricKey.backgroundAudioSeconds]
-        case .totalBackgroundLocationTime: [MetricKey.backgroundLocationSeconds]
-        case .cpuTime: [MetricKey.cpuSeconds]
-        case .cpuInstructionsCount: [MetricKey.cpuInstructions]
-        case .gpuTime: [MetricKey.gpuSeconds]
-        case .peakMemory: [MetricKey.peakMemoryMB]
-        case .suspendedMemory: [MetricKey.suspendedMemoryMB]
-        case .totalWiFiUpload: [MetricKey.wifiUploadMB]
-        case .totalWiFiDownload: [MetricKey.wifiDownloadMB]
-        case .totalCellularUpload: [MetricKey.cellularUploadMB]
-        case .totalCellularDownload: [MetricKey.cellularDownloadMB]
-        case .cellularConditionTime: [MetricKey.cellularConditionBars]
-        case .logicalDiskWrites: [MetricKey.logicalDiskWritesMB]
-        case .totalFileCount: [MetricKey.binaryFileCount, MetricKey.dataFileCount]
-        case .totalFileSize: [MetricKey.binaryFileSizeMB, MetricKey.dataFileSizeMB, MetricKey.cacheFolderSizeMB, MetricKey.cloneSizeMB]
-        case .totalDiskSpaceCapacity: [MetricKey.diskCapacityMB, MetricKey.diskUsedMB]
-        case .locationActivityTime: Self.locationAccuracies.map(MetricKey.locationSeconds)
-        case .pixelLuminance: [MetricKey.pixelLuminance]
+        case .timeToFirstDraw: [.timeToFirstDraw]
+        case .optimizedTimeToFirstDraw: [.optimizedTimeToFirstDraw]
+        case .extendedLaunch: [.extendedLaunch]
+        case .applicationResumeTime: [.applicationResumeTime]
+        case .hangTime: [.hangTime]
+        case .hitchTime: [.hitchRatio, .hitchSeconds, .animationSeconds]
+        case .foregroundTermination: ForegroundTerminationReason.allCases.map(MetricKey.foregroundTermination)
+        case .backgroundTermination: BackgroundTerminationReason.allCases.map(MetricKey.backgroundTermination)
+        case .totalForegroundTime: [.foregroundSeconds]
+        case .totalBackgroundTime: [.backgroundSeconds]
+        case .totalBackgroundAudioTime: [.backgroundAudioSeconds]
+        case .totalBackgroundLocationTime: [.backgroundLocationSeconds]
+        case .cpuTime: [.cpuSeconds]
+        case .cpuInstructionsCount: [.cpuInstructions]
+        case .gpuTime: [.gpuSeconds]
+        case .peakMemory: [.peakMemoryMB]
+        case .suspendedMemory: [.suspendedMemoryMB]
+        case .totalWiFiUpload: [.wifiUploadMB]
+        case .totalWiFiDownload: [.wifiDownloadMB]
+        case .totalCellularUpload: [.cellularUploadMB]
+        case .totalCellularDownload: [.cellularDownloadMB]
+        case .cellularConditionTime: [.cellularConditionBars]
+        case .logicalDiskWrites: [.logicalDiskWritesMB]
+        case .totalFileCount: [.binaryFileCount, .dataFileCount]
+        case .totalFileSize: [.binaryFileSizeMB, .dataFileSizeMB, .cacheFolderSizeMB, .cloneSizeMB]
+        case .totalDiskSpaceCapacity: [.diskCapacityMB, .diskUsedMB]
+        case .locationActivityTime: LocationAccuracy.allCases.map(MetricKey.locationSeconds)
+        case .pixelLuminance: [.pixelLuminance]
         case .metalFrameRate, .signpostInterval: []
         }
     }
@@ -212,7 +215,13 @@ extension MetricSummary {
         Metric.allCases.filter { metric in
             switch metric {
             case .signpostInterval: return !signposts.isEmpty
-            case .metalFrameRate: return values.keys.contains { $0.hasPrefix("metalFrameRate[") }
+            case .metalFrameRate:
+                return values.keys.contains {
+                    switch $0 {
+                    case .metalFPS, .metalFrames, .metalActiveSeconds: true
+                    default: false
+                    }
+                } || counts.keys.contains { if case .metalFrames = $0 { true } else { false } }
             default:
                 return metric.storageKeys.contains { histograms[$0] != nil || values[$0] != nil || counts[$0] != nil }
             }

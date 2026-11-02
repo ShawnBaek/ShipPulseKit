@@ -20,7 +20,7 @@ private func day(_ iso: String) -> Date {
     @Test func firstLaunchEmitsInstallAndActiveDay() {
         let (records, state) = RetentionTracker.records(for: fresh, at: day("2026-11-01T09:00:00Z"), context: context)
         #expect(records.map(\.kind) == [.install, .activeDay])
-        #expect(records[1].fields["daysSinceInstall"] == .int(0))
+        #expect(records[1].fields[.daysSinceInstall] == .int(0))
         #expect(state == RetentionTracker.State(installID: "abc", firstLaunch: day("2026-11-01T09:00:00Z"), lastActiveDay: "2026-11-01"))
     }
 
@@ -35,14 +35,31 @@ private func day(_ iso: String) -> Date {
         let (first, state) = RetentionTracker.records(for: fresh, at: day("2026-11-01T09:00:00Z"), context: context)
         let (later, _) = RetentionTracker.records(for: state, at: day("2026-11-08T09:00:00Z"), context: context)
         #expect(later.map(\.kind) == [.activeDay])
-        #expect(later[0].fields["daysSinceInstall"] == .int(7))
-        #expect(later[0].fields["installID"] == first[0].fields["installID"])
+        #expect(later[0].fields[.daysSinceInstall] == .int(7))
+        #expect(later[0].fields[.installID] == first[0].fields[.installID])
         #expect(later[0].recordName == "active-abc-2026-11-08")
     }
 
     @Test func daysAreUTC() {
         #expect(RetentionTracker.dayString(day("2026-11-01T23:59:59Z")) == "2026-11-01")
         #expect(RetentionTracker.daysBetween(day("2026-11-01T23:00:00Z"), day("2026-11-02T01:00:00Z")) == 1)
+    }
+}
+
+@Suite struct PendingRecordFormatTests {
+    @Test func fieldsStayAJSONObjectKeyedByName() throws {
+        let record = PendingRecord(kind: .activeDay, recordName: "a", fields: [.day: .string("2026-11-01")], createdAt: Date())
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
+        let fields = try #require(json["fields"] as? [String: Any])
+        #expect(Array(fields.keys) == ["day"])
+        #expect(try JSONDecoder().decode(PendingRecord.self, from: JSONEncoder().encode(record)) == record)
+    }
+
+    @Test func decodesARecordQueuedBy010() throws {
+        let json = #"{"kind":"activeDay","recordName":"active-x-2026-11-01","fields":{"day":{"string":{"_0":"2026-11-01"}},"daysSinceInstall":{"int":{"_0":3}}},"createdAt":800000000}"#
+        let record = try JSONDecoder().decode(PendingRecord.self, from: Data(json.utf8))
+        #expect(record.fields[.day] == .string("2026-11-01"))
+        #expect(record.fields[.daysSinceInstall] == .int(3))
     }
 }
 
@@ -57,8 +74,8 @@ private func day(_ iso: String) -> Date {
         let record = PayloadMapper.summaryRecord(report: report, rawJSON: Data("{}".utf8), begin: begin, end: day("2026-11-01T00:00:00Z"), installID: "abc", context: context, now: Date())
         #expect(record.kind.recordType == "SPMetricSummary")
         #expect(record.recordName == "summary-abc-\(Int64(begin.timeIntervalSince1970))")
-        #expect(record.fields["isTestFlight"] == .int(1))
-        guard case .bytes(let body) = record.fields["summary"] else { Issue.record("missing summary"); return }
+        #expect(record.fields[.isTestFlight] == .int(1))
+        guard case .bytes(let body) = record.fields[.summary] else { Issue.record("missing summary"); return }
         let decoded = try JSONDecoder().decode(DailyReport.self, from: try (body as NSData).decompressed(using: .zlib) as Data)
         #expect(decoded == report)
     }
@@ -68,14 +85,14 @@ private func day(_ iso: String) -> Date {
         let a = PayloadMapper.diagnosticRecord(json: json, kind: "hang", durationMs: 2400, extraFields: [:], isTestFlight: false, begin: Date(), end: Date(), context: context, now: Date())
         let b = PayloadMapper.diagnosticRecord(json: json, kind: "hang", durationMs: 2400, extraFields: [:], isTestFlight: false, begin: Date(), end: Date(), context: context, now: Date())
         #expect(a.recordName == b.recordName)
-        #expect(a.fields["kind"] == .string("hang"))
-        #expect(a.fields["durationMs"] == .double(2400))
+        #expect(a.fields[.kind] == .string("hang"))
+        #expect(a.fields[.durationMs] == .double(2400))
     }
 
     @Test func compressedPayloadRoundTrips() throws {
         let json = Data(String(repeating: #"{"histogram":[1,2,3]},"#, count: 200).utf8)
         let record = PayloadMapper.diagnosticRecord(json: json, kind: "crash", durationMs: nil, extraFields: [:], isTestFlight: false, begin: Date(), end: Date(), context: context, now: Date())
-        guard case .bytes(let body) = record.fields["payload"] else { Issue.record("missing payload"); return }
+        guard case .bytes(let body) = record.fields[.payload] else { Issue.record("missing payload"); return }
         #expect(try (body as NSData).decompressed(using: .zlib) as Data == json)
     }
 }
@@ -90,7 +107,7 @@ private func temporaryDirectory() -> URL {
     }
 
     private func record(_ name: String, at date: Date = Date()) -> PendingRecord {
-        PendingRecord(kind: .activeDay, recordName: name, fields: ["day": .string("2026-11-01")], createdAt: date)
+        PendingRecord(kind: .activeDay, recordName: name, fields: [.day: .string("2026-11-01")], createdAt: date)
     }
 
     @Test func persistsUntilRemoved() async throws {
@@ -158,7 +175,7 @@ private func temporaryDirectory() -> URL {
         let container = makeContainer(suite: suite)
         let records = await container.updateRetention { RetentionTracker.records(for: $0, at: day("2026-11-01T09:00:00Z"), context: context) }
         #expect(records.map(\.recordName) == ["active-legacy-id-2026-11-01"])
-        #expect(records[0].fields["daysSinceInstall"] == .int(31))
+        #expect(records[0].fields[.daysSinceInstall] == .int(31))
         #expect(await container.sampling().sampleRate == 0.25)
     }
 
@@ -246,7 +263,7 @@ private actor RecordingUploader: RecordUploading {
 }
 
 @Suite struct EngineTests {
-    @MainActor private func makeEngine(_ uploader: RecordingUploader, configuration: Configuration = Configuration(sampling: .fixed(1), diagnosticSampling: .fixed(1))) throws -> (Engine, DataContainer) {
+    @MainActor private func makeEngine(_ uploader: RecordingUploader, configuration: Configuration = Configuration(sampling: .fixed(rate: 1), diagnosticSampling: .fixed(rate: 1))) throws -> (Engine, DataContainer) {
         let container = DataContainer(directory: temporaryDirectory(), maxAge: 3600, maxCount: 500, defaultsSuite: freshSuite())
         let engine = try Engine(configuration: configuration, container: container, uploader: uploader, context: context)
         return (engine, container)
@@ -275,12 +292,12 @@ private actor RecordingUploader: RecordUploading {
         let uploader = RecordingUploader(rejecting: ["a"])
         let (engine, container) = try makeEngine(uploader)
         await engine.enqueue([PendingRecord(kind: .activeDay, recordName: "a", fields: [:], createdAt: Date())])
-        #expect(try await container.pending(limit: 1).first?.fields[Schema.Field.sampleRate] == .double(1))
+        #expect(try await container.pending(limit: 1).first?.fields[.sampleRate] == .double(1))
     }
 
     @MainActor @Test func zeroRateQueuesNothing() async throws {
         let uploader = RecordingUploader()
-        let (engine, container) = try makeEngine(uploader, configuration: Configuration(sampling: .fixed(0)))
+        let (engine, container) = try makeEngine(uploader, configuration: Configuration(sampling: .fixed(rate: 0)))
         await engine.enqueue([PendingRecord(kind: .activeDay, recordName: "a", fields: [:], createdAt: Date())])
         #expect(try await container.pendingCount() == 0)
         #expect(await uploader.batches.isEmpty)

@@ -36,13 +36,13 @@ extension ShipPulseKit {
     /// - Parameters:
     ///   - name: The region's name, shown in ShipPulse.
     ///   - category: The signpost category. Defaults to `"ShipPulse"`.
-    ///   - body: The work to measure.
-    /// - Returns: The result of `body`.
+    ///   - operation: The work to measure.
+    /// - Returns: The result of `operation`.
     @MainActor
-    public static func measureHitches<T>(_ name: StaticString, category: String = "ShipPulse", _ body: () async throws -> T) async rethrows -> T {
+    public static func measureHitches<Result>(_ name: StaticString, category: String = "ShipPulse", _ operation: () async throws -> Result) async rethrows -> Result {
         let interval = HitchInterval(name: name, category: category)
         defer { interval.end() }
-        return try await body()
+        return try await operation()
     }
 }
 
@@ -121,6 +121,8 @@ extension View {
 
     /// Measures hitches only while the scroll view moves.
     ///
+    /// The SwiftUI counterpart of UIKit's `shipPulseTrackScrollHitches(_:category:)`.
+    ///
     /// Available on iOS and macOS, not on watchOS or visionOS, where MetricKit has no
     /// animation signposts.
     ///
@@ -148,6 +150,8 @@ import UIKit
 
 extension UIView {
     /// Runs `UIView.animate` and measures hitches until the animation completes.
+    ///
+    /// The UIKit counterpart of SwiftUI's ``ShipPulseKit/ShipPulseKit/withAnimation(_:_:category:_:)``.
     ///
     /// Available on iOS, not on watchOS or visionOS, where MetricKit has no animation
     /// signposts.
@@ -181,6 +185,9 @@ extension UIView {
 extension UIViewPropertyAnimator {
     /// Measures hitches from now until the animator finishes.
     ///
+    /// The UIKit counterpart of SwiftUI's ``ShipPulseKit/ShipPulseKit/withAnimation(_:_:category:_:)``,
+    /// for property animators.
+    ///
     /// Available on iOS, not on watchOS or visionOS, where MetricKit has no animation
     /// signposts.
     ///
@@ -198,6 +205,8 @@ extension UIViewPropertyAnimator {
 
 extension UIScrollView {
     /// Measures hitches whenever this scroll view is dragged or decelerating.
+    ///
+    /// The UIKit counterpart of SwiftUI's `shipPulseScrollHitches(_:category:)`.
     ///
     /// Available on iOS, not on watchOS or visionOS, where MetricKit has no animation
     /// signposts.

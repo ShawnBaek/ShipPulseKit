@@ -69,7 +69,7 @@ extension View {
 /// Automatic screen reporting for UIKit.
 ///
 /// Every `viewDidAppear(_:)` of a content view controller reports its class name. Enabled
-/// by ``Configuration/automaticScreenTracking``.
+/// by ``Configuration/tracksScreensAutomatically``.
 enum AutomaticScreenTracking {
     @MainActor private static var installed = false
 

@@ -18,21 +18,32 @@ public enum Sampling {
         return Double(bucket) < rate * 10_000
     }
 
-    /// A rate that keeps roughly `targetPerGroup` reporting devices in the largest
+    /// A rate that keeps roughly `targetDevicesPerGroup` reporting devices in the largest
     /// device-model group.
     ///
     /// The ShipPulse app writes the result to the `SPConfig` record.
     ///
     /// - Parameters:
-    ///   - largestGroupDevices: Devices in the largest device-model group.
-    ///   - targetPerGroup: Reporting devices to keep in that group.
+    ///   - largestGroupDeviceCount: Devices in the largest device-model group.
+    ///   - targetDevicesPerGroup: Reporting devices to keep in that group.
     /// - Returns: A rate from a few fixed steps, so the sample rarely changes.
-    public static func recommendedRate(largestGroupDevices: Int, targetPerGroup: Int = 300) -> Double {
-        guard largestGroupDevices > targetPerGroup else { return 1 }
-        let raw = Double(targetPerGroup) / Double(largestGroupDevices)
+    public static func recommendedRate(largestGroupDeviceCount: Int, targetDevicesPerGroup: Int = 300) -> Double {
+        guard largestGroupDeviceCount > targetDevicesPerGroup else { return 1 }
+        let raw = Double(targetDevicesPerGroup) / Double(largestGroupDeviceCount)
         // Round to a few stable steps so the rate (and therefore the sample) rarely changes.
         let steps: [Double] = [1, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01]
         return steps.first { $0 <= raw } ?? 0.01
+    }
+
+    /// The 0.1.0 spelling of ``recommendedRate(largestGroupDeviceCount:targetDevicesPerGroup:)``.
+    ///
+    /// - Parameters:
+    ///   - largestGroupDevices: Devices in the largest device-model group.
+    ///   - targetPerGroup: Reporting devices to keep in that group.
+    /// - Returns: The recommended rate.
+    @available(*, deprecated, renamed: "recommendedRate(largestGroupDeviceCount:targetDevicesPerGroup:)")
+    public static func recommendedRate(largestGroupDevices: Int, targetPerGroup: Int = 300) -> Double {
+        recommendedRate(largestGroupDeviceCount: largestGroupDevices, targetDevicesPerGroup: targetPerGroup)
     }
 
     /// The FNV-1a hash of some data.
