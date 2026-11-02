@@ -24,8 +24,9 @@ public final class HitchInterval: Sendable {
 
     /// Begins the animation signpost.
     ///
-    /// Main-actor isolated because the animations and scrolling it measures run there, so
-    /// the begin signpost lands on the thread whose frames MetricKit attributes to it.
+    /// Main-actor isolated because every entry point that opens an interval is a main-actor
+    /// UI API: ``ShipPulseKit/beginHitchInterval(_:category:)``, the animation helpers and
+    /// the scroll trackers.
     ///
     /// - Parameters:
     ///   - name: The region's name, shown in ShipPulse.
