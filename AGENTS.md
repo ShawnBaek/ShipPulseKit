@@ -87,8 +87,13 @@ Import replaces the whole schema of the target environment.
      APIs, and the SwiftUI and UIKit extensions.
    - Update `README.md` when the API changes.
 8. **Swift 6 strict concurrency.**
-   - Prefer actors and `@MainActor` over locks.
-   - `@unchecked Sendable` only where a framework forces it, with the reason in a comment.
+   - The compiler must prove every concurrency boundary. Don't use `@unchecked Sendable`,
+     `nonisolated(unsafe)` or `@preconcurrency` to silence a diagnostic.
+   - Prefer actors and `@MainActor`; use checked `Sendable` value types, `sending`
+     parameters and results, and `@Sendable` closures to move values across isolation.
+   - When a framework type isn't `Sendable` (for example `MetricManager`), keep it inside
+     one actor or the main actor and pass only `Sendable` values out. For shared mutable
+     state that can't live in an actor, use `Mutex` from `Synchronization`.
 9. **Platform guards:** MetricKit is unavailable on watchOS and tvOS. On visionOS,
    `metricReports`, `MetricReport` and `logHandle(category:)` are unavailable, so metric
    mapping and `Hitches/*` also need `!os(visionOS)`. Build every platform before
