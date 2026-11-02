@@ -169,22 +169,40 @@ actor DataContainer {
 
     /// Drops records older than the maximum age, then the oldest beyond the maximum count.
     ///
+    /// Files this version can't decode, such as a record a newer SDK wrote before the app
+    /// was downgraded, expire by modification date so they don't stay on disk forever.
+    ///
     /// - Parameter now: The current date.
     func prune(now: Date) throws {
-        let all = try load().sorted { $0.createdAt < $1.createdAt }
+        let (records, undecodable) = try scan()
+        let all = records.sorted { $0.createdAt < $1.createdAt }
         let expired = all.filter { now.timeIntervalSince($0.createdAt) > maxAge }
         let fresh = all.filter { now.timeIntervalSince($0.createdAt) <= maxAge }
         let overflow = fresh.count > maxCount ? Array(fresh.prefix(fresh.count - maxCount)) : []
         remove((expired + overflow).map(\.recordName))
+        for url in undecodable {
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            if now.timeIntervalSince(modified) > maxAge { try? FileManager.default.removeItem(at: url) }
+        }
     }
 
     private func load() throws -> [PendingRecord] {
-        guard FileManager.default.fileExists(atPath: directory.path()) else { return [] }
-        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-        return files.filter { $0.pathExtension == "json" }.compactMap { url in
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return try? decoder.decode(PendingRecord.self, from: data)
+        try scan().records
+    }
+
+    private func scan() throws -> (records: [PendingRecord], undecodable: [URL]) {
+        guard FileManager.default.fileExists(atPath: directory.path()) else { return ([], []) }
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])
+        var records: [PendingRecord] = []
+        var undecodable: [URL] = []
+        for url in files where url.pathExtension == "json" {
+            if let data = try? Data(contentsOf: url), let record = try? decoder.decode(PendingRecord.self, from: data) {
+                records.append(record)
+            } else {
+                undecodable.append(url)
+            }
         }
+        return (records, undecodable)
     }
 
     private func fileURL(for recordName: String) -> URL {

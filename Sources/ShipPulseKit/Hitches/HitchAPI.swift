@@ -51,10 +51,10 @@ import SwiftUI
 
 extension ShipPulseKit {
     /// Runs SwiftUI's `withAnimation` and measures hitches until the animation logically
+    /// completes.
     ///
     /// Available on iOS and macOS, not on watchOS or visionOS, where MetricKit has no
     /// animation signposts.
-    /// completes.
     ///
     /// ```swift
     /// ShipPulseKit.withAnimation("CardFlip", .spring) { isFlipped.toggle() }

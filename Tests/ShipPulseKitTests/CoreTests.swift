@@ -181,7 +181,14 @@ import ShipPulseKitCore
         #expect(try JSONDecoder().decode([MetricKey: Double].self, from: data) == [key: 1])
     }
 
+    @Test func unknownTerminationReasonsCountAsAbnormal() {
+        var group = GroupAggregate(key: "k")
+        group.add(MetricSummary(counts: [.foregroundTermination(.watchdog): 1, .unknown("backgroundTermination.someNewReason"): 2, .unknown("foregroundTermination.normal"): 5]))
+        #expect(group.abnormalTerminations == 3)
+    }
+
     @Test func snapshotKeysAreDistributions() {
+        #expect(MetricKey.unknown("peakMemory.mb").isDistribution)
         #expect(MetricKey.peakMemoryMB.isDistribution)
         #expect(MetricKey.metalFPS(layer: "Game").isDistribution)
         #expect(!MetricKey.foregroundSeconds.isDistribution)

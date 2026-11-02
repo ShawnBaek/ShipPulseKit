@@ -247,8 +247,28 @@ public enum MetricKey: Hashable, Sendable {
     ///
     /// Groups report the spread of snapshot values across devices instead of summing them.
     public var isDistribution: Bool {
-        if case .metalFPS = self { return true }
-        return Self.distributionKeys.contains(self)
+        switch self {
+        case .metalFPS: return true
+        case .unknown(let raw):
+            // An `unknown` built from a known key's string behaves like that key.
+            let canonical = MetricKey(rawValue: raw)
+            if case .unknown = canonical { return false }
+            return canonical.isDistribution
+        default: return Self.distributionKeys.contains(self)
+        }
+    }
+
+    /// The 0.1.0 set of snapshot keys.
+    @available(*, deprecated, message: "Use MetricKey.isDistribution.")
+    public static var distribution: Set<String> { Set(distributionKeys.map(\.rawValue)) }
+
+    /// The 0.1.0 spelling of ``isDistribution``.
+    ///
+    /// - Parameter key: A stored key.
+    /// - Returns: `true` for snapshot keys.
+    @available(*, deprecated, message: "Use MetricKey(rawValue:).isDistribution.")
+    public static func isDistribution(_ key: String) -> Bool {
+        MetricKey(rawValue: key).isDistribution
     }
 }
 

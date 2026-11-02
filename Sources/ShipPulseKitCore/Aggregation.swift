@@ -95,6 +95,8 @@ public struct GroupAggregate: Sendable, Equatable {
             switch $0.key {
             case .foregroundTermination(let reason): reason != .normal
             case .backgroundTermination(let reason): reason != .normal
+            // A reason added by a newer SDK still counts.
+            case .unknown(let raw): (raw.hasPrefix("foregroundTermination.") || raw.hasPrefix("backgroundTermination.")) && !raw.hasSuffix(".normal")
             default: false
             }
         }
@@ -124,6 +126,29 @@ extension GroupAggregate {
     @available(*, deprecated, renamed: "samplePercentile(_:of:)")
     public func samplePercentile(_ key: String, _ p: Double) -> Double? {
         samplePercentile(p, of: MetricKey(rawValue: key))
+    }
+
+    /// The 0.1.0 argument order of ``percentile(_:of:)``, for calls like
+    /// `percentile(MetricKey.hangTime, 0.9)`.
+    ///
+    /// - Parameters:
+    ///   - histogramKey: A histogram key.
+    ///   - p: The percentile, from `0` to `1`.
+    /// - Returns: The value in milliseconds, or `nil` if the group has no such histogram.
+    @available(*, deprecated, renamed: "percentile(_:of:)")
+    public func percentile(_ histogramKey: MetricKey, _ p: Double) -> Double? {
+        percentile(p, of: histogramKey)
+    }
+
+    /// The 0.1.0 argument order of ``samplePercentile(_:of:)``.
+    ///
+    /// - Parameters:
+    ///   - key: A snapshot key.
+    ///   - p: The percentile, from `0` to `1`.
+    /// - Returns: The nearest device's value, or `nil` if no device reported it.
+    @available(*, deprecated, renamed: "samplePercentile(_:of:)")
+    public func samplePercentile(_ key: MetricKey, _ p: Double) -> Double? {
+        samplePercentile(p, of: key)
     }
 }
 

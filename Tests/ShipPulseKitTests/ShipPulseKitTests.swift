@@ -187,6 +187,21 @@ private func temporaryDirectory() -> URL {
         #expect(stored == DataContainer.StoredSampling(sampleRate: 0.5, diagnosticSampleRate: 0.1, fetchedAt: fetchedAt))
     }
 
+    @Test func undecodableFilesExpireByModificationDate() async throws {
+        let directory = temporaryDirectory()
+        let container = makeContainer(directory: directory, maxAge: 60)
+        try await container.enqueue([record("fresh")])
+        let stale = directory.appending(path: "from-newer-sdk.json")
+        try Data(#"{"kind":"someFutureKind"}"#.utf8).write(to: stale)
+        try FileManager.default.setAttributes([.modificationDate: Date() - 3600], ofItemAtPath: stale.path(percentEncoded: false))
+        let recent = directory.appending(path: "recent-unknown.json")
+        try Data("not json".utf8).write(to: recent)
+        try await container.prune(now: Date())
+        #expect(!FileManager.default.fileExists(atPath: stale.path(percentEncoded: false)))
+        #expect(FileManager.default.fileExists(atPath: recent.path(percentEncoded: false)))
+        #expect(try await container.pending(limit: 10).map(\.recordName) == ["fresh"])
+    }
+
     @Test func defaultDirectoryIsThe010Queue() {
         #expect(DataContainer.defaultDirectory().path(percentEncoded: false).hasSuffix("Application Support/ShipPulseKit/Queue/"))
     }
