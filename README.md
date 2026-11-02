@@ -15,6 +15,19 @@ Requires iOS, macOS, watchOS or visionOS 27+. Test on a physical device; MetricK
 report in the Simulator. visionOS has no daily metric reports, so it sends diagnostics and
 retention only.
 
+## Architecture
+
+![ShipPulseKit architecture](docs/design/architecture.png)
+
+- **Collectors** turn MetricKit reports and app launches into records.
+- **Engine** samples the records and hands them to **DataContainer**, the only owner of
+  on-device state: pending records and a few UserDefaults keys.
+- **CloudKitUploader** saves pending records to your CloudKit container. A record leaves the
+  device only after CloudKit accepts it.
+
+Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-Architecture.sketch).
+The `DataContainer` split shown here lands in the next release.
+
 ## 1. Enable CloudKit
 
 1. In Xcode, open **Signing & Capabilities → + iCloud** and check **CloudKit**. Pick a
