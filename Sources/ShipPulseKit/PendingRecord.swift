@@ -28,7 +28,7 @@ struct PendingRecord: Codable, Sendable, Equatable {
     var recordName: String
     /// The record's fields, keyed by `Schema.Field` names.
     var fields: [String: FieldValue]
-    /// When the record was queued. Drives upload order and expiry in ``UploadQueue``.
+    /// When the record was queued. Drives upload order and expiry in ``DataContainer``.
     var createdAt: Date
 }
 

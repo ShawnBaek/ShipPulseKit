@@ -197,7 +197,9 @@ extension UIScrollView {
 /// observed through `contentOffset` KVO, with no per-frame callback of its own.
 @MainActor
 final class ScrollHitchTracker: NSObject {
-    nonisolated(unsafe) static var associationKey: UInt8 = 0
+    /// Only its address is used, as the associated-object key. Main-actor isolated like the
+    /// rest of the class, so the compiler checks every access.
+    static var associationKey: UInt8 = 0
     private let name: StaticString
     private let category: String
     private weak var scrollView: UIScrollView?

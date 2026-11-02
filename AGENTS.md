@@ -19,8 +19,9 @@ Sources/ShipPulseKitCore/     Pure Swift, no Apple-UI or CloudKit: Schema, Metri
                               DailyReport, Histogram, Aggregation, Sampling.
                               Also imported by the ShipPulse app.
 Sources/ShipPulseKit/         The SDK: Engine, MetricKitCollector, ReportMapper,
-                              UploadQueue (offline-first), CloudKitUploader,
-                              RetentionTracker, ScreenReporter, Hitches/*
+                              DataContainer (sole owner of on-device state: queued
+                              records and UserDefaults keys), CloudKitUploader,
+                              RetentionTracker (pure), ScreenReporter, Hitches/*
 Sources/ShipPulseKitObjC/     One function: catches the NSException CloudKit raises when the
                               host app has no iCloud entitlement.
 CloudKit/ShipPulseKit.ckdb    Schema fragment, merged into each host container
@@ -67,7 +68,7 @@ Import replaces the whole schema of the target environment.
 3. **Record names stay deterministic.** Retries and redelivered reports must overwrite, not
    duplicate. Use `Sampling.stableHash` (FNV-1a), never `hashValue`, which is seeded per
    process.
-4. **Offline first.** Write every record to `UploadQueue` before uploading, and remove it
+4. **Offline first.** Write every record to `DataContainer` before uploading, and remove it
    only after CloudKit accepts it.
 5. **Record every MetricKit metric.**
    - When Apple adds a `MetricResult` case, map it in `ReportMapper.summary` with a
@@ -86,9 +87,12 @@ Import replaces the whole schema of the target environment.
    - Keep entry points small: `start`, `flush`, `reportScreen`, `trackLaunchTask`, the hitch
      APIs, and the SwiftUI and UIKit extensions.
    - Update `README.md` when the API changes.
-8. **Swift 6 strict concurrency.**
-   - Prefer actors and `@MainActor` over locks.
-   - `@unchecked Sendable` only where a framework forces it, with the reason in a comment.
+8. **Swift 6 strict concurrency, proven by the compiler.**
+   - Prefer actors and `@MainActor`; use `Mutex` from `Synchronization` where state must be
+     shared outside an actor.
+   - Never `@unchecked Sendable`, `nonisolated(unsafe)` or `@preconcurrency`. Keep
+     non-Sendable framework objects (such as `UserDefaults`) inside one isolation domain
+     and pass only Sendable values out.
 9. **Platform guards:** MetricKit is unavailable on watchOS and tvOS. On visionOS,
    `metricReports`, `MetricReport` and `logHandle(category:)` are unavailable, so metric
    mapping and `Hitches/*` also need `!os(visionOS)`. Build every platform before

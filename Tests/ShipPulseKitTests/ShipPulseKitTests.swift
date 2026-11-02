@@ -6,9 +6,8 @@ import ShipPulseKitCore
 
 private let context = RecordContext(bundleIdentifier: "com.example.app", appVersion: "2.4", buildVersion: "120", osVersion: "26.1.0", deviceModel: "iPhone18,1")
 
-private func freshDefaults() -> UserDefaults {
-    let name = "ShipPulseKitTests-\(UUID().uuidString)"
-    return UserDefaults(suiteName: name)!
+private func freshSuite() -> String {
+    "ShipPulseKitTests-\(UUID().uuidString)"
 }
 
 private func day(_ iso: String) -> Date {
@@ -16,26 +15,34 @@ private func day(_ iso: String) -> Date {
 }
 
 @Suite struct RetentionTrackerTests {
+    private let fresh = RetentionTracker.State(installID: "abc")
+
     @Test func firstLaunchEmitsInstallAndActiveDay() {
-        let tracker = RetentionTracker(defaults: freshDefaults())
-        let records = tracker.records(at: day("2026-11-01T09:00:00Z"), context: context)
+        let (records, state) = RetentionTracker.records(for: fresh, at: day("2026-11-01T09:00:00Z"), context: context)
         #expect(records.map(\.kind) == [.install, .activeDay])
         #expect(records[1].fields["daysSinceInstall"] == .int(0))
+        #expect(state == RetentionTracker.State(installID: "abc", firstLaunch: day("2026-11-01T09:00:00Z"), lastActiveDay: "2026-11-01"))
     }
 
     @Test func sameDayEmitsNothing() {
-        let tracker = RetentionTracker(defaults: freshDefaults())
-        _ = tracker.records(at: day("2026-11-01T09:00:00Z"), context: context)
-        #expect(tracker.records(at: day("2026-11-01T22:00:00Z"), context: context).isEmpty)
+        let (_, state) = RetentionTracker.records(for: fresh, at: day("2026-11-01T09:00:00Z"), context: context)
+        let (records, unchanged) = RetentionTracker.records(for: state, at: day("2026-11-01T22:00:00Z"), context: context)
+        #expect(records.isEmpty)
+        #expect(unchanged == state)
     }
 
     @Test func laterDayEmitsActiveDayWithDayIndex() {
-        let tracker = RetentionTracker(defaults: freshDefaults())
-        let first = tracker.records(at: day("2026-11-01T09:00:00Z"), context: context)
-        let later = tracker.records(at: day("2026-11-08T09:00:00Z"), context: context)
+        let (first, state) = RetentionTracker.records(for: fresh, at: day("2026-11-01T09:00:00Z"), context: context)
+        let (later, _) = RetentionTracker.records(for: state, at: day("2026-11-08T09:00:00Z"), context: context)
         #expect(later.map(\.kind) == [.activeDay])
         #expect(later[0].fields["daysSinceInstall"] == .int(7))
         #expect(later[0].fields["installID"] == first[0].fields["installID"])
+        #expect(later[0].recordName == "active-abc-2026-11-08")
+    }
+
+    @Test func daysAreUTC() {
+        #expect(RetentionTracker.dayString(day("2026-11-01T23:59:59Z")) == "2026-11-01")
+        #expect(RetentionTracker.daysBetween(day("2026-11-01T23:00:00Z"), day("2026-11-02T01:00:00Z")) == 1)
     }
 }
 
@@ -73,10 +80,13 @@ private func day(_ iso: String) -> Date {
     }
 }
 
-@Suite struct UploadQueueTests {
-    private func makeQueue(maxCount: Int = 500, maxAge: TimeInterval = 3600) -> UploadQueue {
-        let dir = FileManager.default.temporaryDirectory.appending(path: "ShipPulseKitTests-\(UUID().uuidString)")
-        return UploadQueue(directory: dir, maxAge: maxAge, maxCount: maxCount)
+private func temporaryDirectory() -> URL {
+    FileManager.default.temporaryDirectory.appending(path: "ShipPulseKitTests-\(UUID().uuidString)")
+}
+
+@Suite struct DataContainerTests {
+    private func makeContainer(directory: URL = temporaryDirectory(), suite: String = freshSuite(), maxCount: Int = 500, maxAge: TimeInterval = 3600) -> DataContainer {
+        DataContainer(directory: directory, maxAge: maxAge, maxCount: maxCount, defaultsSuite: suite)
     }
 
     private func record(_ name: String, at date: Date = Date()) -> PendingRecord {
@@ -84,24 +94,84 @@ private func day(_ iso: String) -> Date {
     }
 
     @Test func persistsUntilRemoved() async throws {
-        let queue = makeQueue()
-        try await queue.enqueue([record("a"), record("b")])
-        #expect(try await queue.count() == 2)
-        await queue.remove(["a"])
-        #expect(try await queue.pending(limit: 10).map(\.recordName) == ["b"])
+        let container = makeContainer()
+        try await container.enqueue([record("a"), record("b")])
+        #expect(try await container.pendingCount() == 2)
+        await container.remove(["a"])
+        #expect(try await container.pending(limit: 10).map(\.recordName) == ["b"])
+    }
+
+    @Test func pendingRecordsSurviveANewContainer() async throws {
+        let directory = temporaryDirectory()
+        let written = record("a")
+        try await makeContainer(directory: directory).enqueue([written])
+        #expect(try await makeContainer(directory: directory).pending(limit: 10) == [written])
+    }
+
+    @Test func reenqueueOverwrites() async throws {
+        let container = makeContainer()
+        try await container.enqueue([record("a")])
+        try await container.enqueue([record("a")])
+        #expect(try await container.pendingCount() == 1)
     }
 
     @Test func dropsOverflowOldestFirst() async throws {
-        let queue = makeQueue(maxCount: 2)
+        let container = makeContainer(maxCount: 2)
         let now = Date()
-        try await queue.enqueue([record("old", at: now - 30), record("mid", at: now - 20), record("new", at: now - 10)])
-        #expect(try await queue.pending(limit: 10).map(\.recordName) == ["mid", "new"])
+        try await container.enqueue([record("old", at: now - 30), record("mid", at: now - 20), record("new", at: now - 10)])
+        #expect(try await container.pending(limit: 10).map(\.recordName) == ["mid", "new"])
     }
 
     @Test func dropsExpired() async throws {
-        let queue = makeQueue(maxAge: 60)
-        try await queue.enqueue([record("stale", at: Date() - 3600), record("fresh")])
-        #expect(try await queue.pending(limit: 10).map(\.recordName) == ["fresh"])
+        let container = makeContainer(maxAge: 60)
+        try await container.enqueue([record("stale", at: Date() - 3600), record("fresh")])
+        #expect(try await container.pending(limit: 10).map(\.recordName) == ["fresh"])
+    }
+
+    @Test func installIDIsStableAcrossContainers() async throws {
+        let suite = freshSuite()
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let id = await makeContainer(suite: suite).installID()
+        #expect(await makeContainer(suite: suite).installID() == id)
+        #expect(defaults.string(forKey: "ShipPulseKit.installID") == id)
+    }
+
+    @Test func retentionStatePersistsUnderTheShippedKeys() async throws {
+        let suite = freshSuite()
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let launch = day("2026-11-01T09:00:00Z")
+        let first = await makeContainer(suite: suite).updateRetention { RetentionTracker.records(for: $0, at: launch, context: context) }
+        #expect(first.count == 2)
+        #expect(defaults.object(forKey: "ShipPulseKit.firstLaunch") as? Date == launch)
+        #expect(defaults.string(forKey: "ShipPulseKit.lastActiveDay") == "2026-11-01")
+        let again = await makeContainer(suite: suite).updateRetention { RetentionTracker.records(for: $0, at: launch + 3600, context: context) }
+        #expect(again.isEmpty)
+    }
+
+    @Test func readsStateWrittenBy010() async throws {
+        let suite = freshSuite()
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set("legacy-id", forKey: "ShipPulseKit.installID")
+        defaults.set(day("2026-10-01T00:00:00Z"), forKey: "ShipPulseKit.firstLaunch")
+        defaults.set("2026-10-31", forKey: "ShipPulseKit.lastActiveDay")
+        defaults.set(0.25, forKey: "ShipPulseKit.sampleRate")
+        let container = makeContainer(suite: suite)
+        let records = await container.updateRetention { RetentionTracker.records(for: $0, at: day("2026-11-01T09:00:00Z"), context: context) }
+        #expect(records.map(\.recordName) == ["active-legacy-id-2026-11-01"])
+        #expect(records[0].fields["daysSinceInstall"] == .int(31))
+        #expect(await container.sampling().sampleRate == 0.25)
+    }
+
+    @Test func samplingRoundTrips() async {
+        let suite = freshSuite()
+        let fetchedAt = day("2026-11-01T09:00:00Z")
+        await makeContainer(suite: suite).saveSampling(RemoteSamplingConfig(sampleRate: 0.5, diagnosticSampleRate: 0.1), fetchedAt: fetchedAt)
+        let stored = await makeContainer(suite: suite).sampling()
+        #expect(stored == DataContainer.StoredSampling(sampleRate: 0.5, diagnosticSampleRate: 0.1, fetchedAt: fetchedAt))
+    }
+
+    @Test func defaultDirectoryIsThe010Queue() {
+        #expect(DataContainer.defaultDirectory().path(percentEncoded: false).hasSuffix("Application Support/ShipPulseKit/Queue/"))
     }
 }
 
@@ -156,36 +226,74 @@ private func day(_ iso: String) -> Date {
 
 private actor RecordingUploader: RecordUploading {
     private(set) var batches: [[String]] = []
+    private let rejecting: Set<String>
+    private let config: RemoteSamplingConfig?
+
+    init(rejecting: Set<String> = [], config: RemoteSamplingConfig? = nil) {
+        self.rejecting = rejecting
+        self.config = config
+    }
 
     func isAvailable() async -> Bool { true }
 
     func upload(_ records: [PendingRecord]) async throws -> [String] {
         let names = records.map(\.recordName)
         batches.append(names)
-        return names
+        return names.filter { !rejecting.contains($0) }
     }
 
-    func fetchSamplingConfig(bundleID: String) async -> RemoteSamplingConfig? { nil }
+    func fetchSamplingConfig(bundleID: String) async -> RemoteSamplingConfig? { config }
 }
 
-@Suite struct EngineFlushTests {
+@Suite struct EngineTests {
+    @MainActor private func makeEngine(_ uploader: RecordingUploader, configuration: Configuration = Configuration(sampling: .fixed(1), diagnosticSampling: .fixed(1))) throws -> (Engine, DataContainer) {
+        let container = DataContainer(directory: temporaryDirectory(), maxAge: 3600, maxCount: 500, defaultsSuite: freshSuite())
+        let engine = try Engine(configuration: configuration, container: container, uploader: uploader, context: context)
+        return (engine, container)
+    }
+
     @MainActor @Test func uploadsTheWholeQueueInBatches() async throws {
-        let dir = FileManager.default.temporaryDirectory.appending(path: "ShipPulseKitTests-\(UUID().uuidString)")
-        let queue = UploadQueue(directory: dir, maxAge: 3600, maxCount: 500)
         let uploader = RecordingUploader()
-        let engine = try Engine(
-            configuration: Configuration(sampling: .fixed(1), diagnosticSampling: .fixed(1)),
-            queue: queue,
-            uploader: uploader,
-            defaults: freshDefaults(),
-            context: context
-        )
+        let (engine, container) = try makeEngine(uploader)
         let now = Date()
         let records = (0..<150).map {
             PendingRecord(kind: .activeDay, recordName: "r\($0)", fields: [:], createdAt: now + Double($0))
         }
         await engine.enqueue(records)
         #expect(await uploader.batches.map(\.count) == [100, 50])
-        #expect(try await queue.count() == 0)
+        #expect(try await container.pendingCount() == 0)
+    }
+
+    @MainActor @Test func keepsRecordsCloudKitDidNotAccept() async throws {
+        let uploader = RecordingUploader(rejecting: ["b"])
+        let (engine, container) = try makeEngine(uploader)
+        await engine.enqueue(["a", "b", "c"].map { PendingRecord(kind: .activeDay, recordName: $0, fields: [:], createdAt: Date()) })
+        #expect(try await container.pending(limit: 10).map(\.recordName) == ["b"])
+    }
+
+    @MainActor @Test func stampsTheSampleRate() async throws {
+        let uploader = RecordingUploader(rejecting: ["a"])
+        let (engine, container) = try makeEngine(uploader)
+        await engine.enqueue([PendingRecord(kind: .activeDay, recordName: "a", fields: [:], createdAt: Date())])
+        #expect(try await container.pending(limit: 1).first?.fields[Schema.Field.sampleRate] == .double(1))
+    }
+
+    @MainActor @Test func zeroRateQueuesNothing() async throws {
+        let uploader = RecordingUploader()
+        let (engine, container) = try makeEngine(uploader, configuration: Configuration(sampling: .fixed(0)))
+        await engine.enqueue([PendingRecord(kind: .activeDay, recordName: "a", fields: [:], createdAt: Date())])
+        #expect(try await container.pendingCount() == 0)
+        #expect(await uploader.batches.isEmpty)
+    }
+
+    @MainActor @Test func storesPublishedRatesOncePerDay() async throws {
+        let uploader = RecordingUploader(config: RemoteSamplingConfig(sampleRate: 0.5, diagnosticSampleRate: 0.2))
+        let (engine, container) = try makeEngine(uploader, configuration: Configuration())
+        let now = day("2026-11-01T09:00:00Z")
+        await engine.refreshSamplingConfig(now: now)
+        #expect(await container.sampling() == DataContainer.StoredSampling(sampleRate: 0.5, diagnosticSampleRate: 0.2, fetchedAt: now))
+        #expect(await engine.sampleRates() == (metric: 0.5, diagnostic: 0.2))
+        await engine.refreshSamplingConfig(now: now + 3600)
+        #expect(await container.sampling().fetchedAt == now)
     }
 }

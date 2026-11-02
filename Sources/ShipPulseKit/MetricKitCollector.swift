@@ -2,17 +2,16 @@
 import Foundation
 import MetricKit
 import ShipPulseKitCore
+import Synchronization
 
 /// Collects iOS 27 MetricKit reports through `MetricManager`'s async streams.
 ///
 /// Metric reports arrive about once a day per device. Diagnostic reports arrive as they
 /// occur, delivered on a later launch. visionOS has no metric reports, only diagnostics.
-///
-/// `@unchecked Sendable`: `tasks` is written only from ``Engine`` on the main actor, and
-/// `MetricManager` is not marked `Sendable` by MetricKit.
-final class MetricKitCollector: @unchecked Sendable {
+final class MetricKitCollector: Sendable {
     let manager: MetricManager
-    private var tasks: [Task<Void, Never>] = []
+    /// The stream listeners, cancelled when the collector goes away.
+    private let tasks = Mutex<[Task<Void, Never>]>([])
 
     /// Creates a collector.
     ///
@@ -32,9 +31,10 @@ final class MetricKitCollector: @unchecked Sendable {
     /// - Parameter onReport: Called for each metric report.
     func startMetrics(onReport: @escaping @Sendable (MetricReport) async -> Void) {
         let reports = manager.metricReports
-        tasks.append(Task.detached(priority: .utility) {
+        let task = Task.detached(priority: .utility) {
             for await report in reports { await onReport(report) }
-        })
+        }
+        tasks.withLock { $0.append(task) }
     }
     #endif
 
@@ -43,13 +43,14 @@ final class MetricKitCollector: @unchecked Sendable {
     /// - Parameter onReport: Called for each diagnostic report.
     func startDiagnostics(onReport: @escaping @Sendable (DiagnosticReport) async -> Void) {
         let diagnostics = manager.diagnosticReports
-        tasks.append(Task.detached(priority: .utility) {
+        let task = Task.detached(priority: .utility) {
             for await report in diagnostics { await onReport(report) }
-        })
+        }
+        tasks.withLock { $0.append(task) }
     }
 
     deinit {
-        tasks.forEach { $0.cancel() }
+        tasks.withLock { $0.forEach { $0.cancel() } }
     }
 }
 

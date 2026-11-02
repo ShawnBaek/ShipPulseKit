@@ -3,6 +3,7 @@ import Foundation
 import MetricKit
 import os
 import ShipPulseKitCore
+import Synchronization
 
 /// A measured region of animation or scrolling.
 ///
@@ -13,13 +14,13 @@ import ShipPulseKitCore
 ///
 /// Names are `StaticString` because MetricKit signposts require compile-time names.
 ///
-/// `@unchecked Sendable`: `isOpen` is mutated only on the main actor; `deinit` reads it
-/// after the last reference is gone.
-public final class HitchInterval: @unchecked Sendable {
+/// An interval is `Sendable`: you can end it from any thread or task, and it ends exactly
+/// once.
+public final class HitchInterval: Sendable {
     private let name: StaticString
     private let log: OSLog
     private let signpostID: OSSignpostID
-    private var isOpen = true
+    private let isOpen = Mutex(true)
 
     @MainActor
     init(name: StaticString, category: String) {
@@ -31,35 +32,33 @@ public final class HitchInterval: @unchecked Sendable {
 
     /// Ends the interval.
     ///
-    /// Calling it more than once is harmless. An interval released without `end()` is
-    /// closed automatically.
-    @MainActor
+    /// Calling it more than once, from any thread, is harmless. An interval released
+    /// without `end()` is closed automatically.
     public func end() {
-        guard isOpen else { return }
-        isOpen = false
+        guard isOpen.withLock({ open in
+            defer { open = false }
+            return open
+        }) else { return }
         mxSignpost(.end, log: log, name: name, signpostID: signpostID)
     }
 
     deinit {
         // An interval dropped without `end()` is closed so the signpost doesn't leak.
-        guard isOpen else { return }
-        let log = log, name = name, id = signpostID
-        mxSignpost(.end, log: log, name: name, signpostID: id)
+        end()
     }
 }
 
 /// Caches one `OSLog` per category, as `MetricManager.logHandle(category:)` requires.
 enum SignpostLogs {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var handles: [String: OSLog] = [:]
+    private static let handles = Mutex<[String: OSLog]>([:])
 
     static func handle(category: String) -> OSLog {
-        lock.lock()
-        defer { lock.unlock() }
-        if let existing = handles[category] { return existing }
-        let handle = MetricManager.logHandle(category: category)
-        handles[category] = handle
-        return handle
+        handles.withLock { handles in
+            if let existing = handles[category] { return existing }
+            let handle = MetricManager.logHandle(category: category)
+            handles[category] = handle
+            return handle
+        }
     }
 }
 #endif
