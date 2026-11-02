@@ -7,20 +7,20 @@ App Store Connect analytics.
 
 **Pure MetricKit approach.** Every vital, including hitches, launch time, hangs and memory,
 is measured by Apple's MetricKit, not by the SDK. ShipPulseKit adds no frame timers or
-sampling of its own, so it costs nothing at runtime and its numbers match Xcode Organizer.
-The SDK only forwards MetricKit reports, marks screens and regions for MetricKit to
-attribute, and records anonymous retention.
+measurements of its own, so its numbers match Xcode Organizer. The SDK only forwards
+MetricKit reports, marks screens and regions for MetricKit to attribute, and records
+anonymous retention.
 
 Requires iOS, macOS, watchOS or visionOS 27+. Test on a physical device; MetricKit doesn't
 report in the Simulator. visionOS has no daily metric reports, so it sends diagnostics and
-retention only.
+retention only. watchOS has no MetricKit, so it sends retention only.
 
 ## Architecture
 
 ![ShipPulseKit architecture](docs/design/architecture.png)
 
 - **Collectors** turn MetricKit reports and app launches into records.
-- **Engine** samples the records and hands them to **DataContainer**, the only owner of
+- **Engine** applies per-install upload sampling and hands records to **DataContainer**, the only owner of
   on-device state: pending records and a few UserDefaults keys.
 - **CloudKitUploader** saves pending records to your CloudKit container. A record leaves the
   device only after CloudKit accepts it.
@@ -38,10 +38,13 @@ The `DataContainer` split shown here lands in the next release.
 4. Before your first TestFlight or App Store build, deploy the schema to **Production**:
    CloudKit Console → your container → **Deploy Schema Changes**. Debug builds write to the
    Development environment; TestFlight and App Store builds write to Production. Until the
-   schema is in Production, release builds keep records queued on the device and nothing
-   arrives.
+   schema is in Production, nothing arrives: release builds keep records on the device for up
+   to 30 days (at most 500 records), then drop the oldest.
 
-Without a container, `start()` throws `ShipPulseKitError.iCloudContainerUnavailable`. It never crashes your app.
+Without a usable container, `start()` throws `ShipPulseKitError.iCloudContainerUnavailable`
+instead of crashing. CloudKit raises an Objective-C exception in that case, which Swift
+can't catch; ShipPulseKit catches it and rethrows it as this error, so your app keeps
+running without metrics.
 
 ## 2. Install
 
@@ -75,7 +78,9 @@ func application(_ application: UIApplication,
 ```
 
 That's all you need. Every MetricKit metric and diagnostic is collected, along with
-retention. UIKit screens are tracked automatically.
+retention. UIKit screens are tracked automatically: ShipPulseKit swizzles
+`UIViewController.viewDidAppear(_:)` to report each content view controller's class name.
+Turn it off with `Configuration(automaticScreenTracking: false)`.
 
 ## Optional: screens and regions
 
@@ -97,15 +102,17 @@ More APIs: [docs/HitchTracking.md](docs/HitchTracking.md).
 ```swift
 try ShipPulseKit.start(Configuration(
     containerIdentifier: "iCloud.com.example.metrics", // default: first container in entitlements
-    database: .public                                  // .private = your own devices only
+    database: .public                                  // .private = each user's own iCloud
 ))
 ```
 
-With `.private`, records stay in each user's own iCloud, so neither you nor the ShipPulse
-app can read other users' data; dashboards and benchmarks need `.public`.
+With `.private`, records still go to iCloud, but into each user's own private database, so
+neither you nor the ShipPulse app can read other users' data; dashboards and benchmarks need
+`.public`.
 
-Other options: `sampling`, `collectsDiagnostics`, `tracksRetention`,
-`automaticScreenTracking`.
+Other options: `collectsMetrics`, `collectsDiagnostics`, `tracksRetention`, `sampling`,
+`diagnosticSampling`, `additionalStateDomains`, `automaticScreenTracking`, `maxQueueAge`
+(default 30 days) and `maxQueuedRecords` (default 500).
 
 ## Data format
 
@@ -142,7 +149,11 @@ The SDK sends no IDFA, IDFV or app user data, and makes no network calls outside
 Diagnostics are sent without Objective-C exception messages or arguments, which could
 contain user data.
 
-Records go to your container's public database, readable by any client of that container.
+Each install gets a random ID kept in UserDefaults; it is per app, never shared across apps,
+and reset when the app is deleted.
+
+By default, records go to your container's public database, readable by any client of that
+container.
 CloudKit stamps each record with the creator's container-scoped user record ID
 (`___createdBy`), which links records from one iCloud account. For the privacy label,
 declare *Diagnostics → Performance Data* and *Crash Data*, used for app functionality and

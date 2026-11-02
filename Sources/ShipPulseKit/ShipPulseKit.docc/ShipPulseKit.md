@@ -4,10 +4,13 @@ Record every MetricKit metric and diagnostic in your own CloudKit container, wit
 
 ## Overview
 
-ShipPulseKit uses MetricKit only: no frame timers, no swizzled render loops. Hitches,
-hangs, launch time, memory and every other metric come from Apple's daily reports, broken
-down by screen. Records are written to disk first and uploaded to your app's CloudKit
-container, where the ShipPulse app reads them. There is no server.
+ShipPulseKit measures nothing itself: no frame timers or sampling of the render loop.
+Hitches, hangs, launch time, memory and every other metric come from Apple's daily MetricKit
+reports, broken down by screen. Records are written to disk first and uploaded to your app's
+CloudKit container, where the ShipPulse app reads them. There is no server.
+
+visionOS has no daily metric reports, so it sends diagnostics and retention only. watchOS
+has no MetricKit, so it sends retention only.
 
 ```swift
 do {
@@ -18,7 +21,24 @@ do {
 ```
 
 Enable **Signing & Capabilities → iCloud → CloudKit** with a container before calling
-``ShipPulseKit/ShipPulseKit/start(_:)``.
+``ShipPulseKit/ShipPulseKit/start(_:)``. Without a usable container it throws
+``ShipPulseKitError/iCloudContainerUnavailable(containerIdentifier:reason:)`` instead of
+crashing, and the app runs on without metrics.
+
+### Screens
+
+UIKit screens are tracked automatically: ShipPulseKit swizzles
+`UIViewController.viewDidAppear(_:)` to report each content view controller's class name to
+StateReporting. Set ``Configuration/automaticScreenTracking`` to `false` to turn it off.
+SwiftUI screens use `shipPulseScreen(_:fileID:)`.
+
+### Records and privacy
+
+By default records go to the container's public database. With
+``Configuration/Database/private`` they go to each user's own private database, which you
+can't read. Records the device can't upload yet stay on disk for
+``Configuration/maxQueueAge`` (30 days by default), up to ``Configuration/maxQueuedRecords``
+(500).
 
 ## Topics
 
