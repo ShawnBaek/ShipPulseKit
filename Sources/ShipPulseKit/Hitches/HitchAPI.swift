@@ -197,7 +197,9 @@ extension UIScrollView {
 /// observed through `contentOffset` KVO, with no per-frame callback of its own.
 @MainActor
 final class ScrollHitchTracker: NSObject {
-    nonisolated(unsafe) static var associationKey: UInt8 = 0
+    /// Only its address is used, as the associated-object key. Main-actor isolated like the
+    /// rest of the class, so the compiler checks every access.
+    static var associationKey: UInt8 = 0
     private let name: StaticString
     private let category: String
     private weak var scrollView: UIScrollView?
@@ -205,6 +207,15 @@ final class ScrollHitchTracker: NSObject {
     private var offsetObservation: NSKeyValueObservation?
     private var settleCheck: DispatchWorkItem?
 
+    /// Starts watching a scroll view's pan gesture.
+    ///
+    /// It adds itself as a gesture target instead of becoming the delegate, so the app's own
+    /// `UIScrollViewDelegate` keeps working.
+    ///
+    /// - Parameters:
+    ///   - name: The region's name, shown in ShipPulse.
+    ///   - category: The signpost category.
+    ///   - scrollView: The scroll view to watch. Held weakly; it retains the tracker.
     init(name: StaticString, category: String, scrollView: UIScrollView) {
         self.name = name
         self.category = category

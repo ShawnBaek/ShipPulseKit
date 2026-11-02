@@ -7,57 +7,52 @@ import UIKit
 import MetricKit
 #endif
 
-/// Connects the collection sources to sampling, ``UploadQueue`` and the uploader.
+/// Connects the collection sources to sampling, ``DataContainer`` and the uploader.
 ///
-/// ``ShipPulseKit`` owns exactly one engine, created by ``ShipPulseKit/start(_:)``.
+/// ``ShipPulseKit`` owns exactly one engine, created by ``ShipPulseKit/start(_:)``. The
+/// engine keeps no state on the device itself: it talks only to ``DataContainer`` and
+/// ``RecordUploading``.
 @MainActor
 final class Engine {
     private let configuration: Configuration
-    private let queue: UploadQueue
+    private let container: DataContainer
     private let uploader: any RecordUploading
-    private let retention: RetentionTracker
     private let context: RecordContext
-    private let defaults: UserDefaults
     private var isFlushing = false
     private var flushRequested = false
-
-    private enum Key {
-        static let sampleRate = "ShipPulseKit.sampleRate"
-        static let diagnosticSampleRate = "ShipPulseKit.diagnosticSampleRate"
-        static let configFetchedAt = "ShipPulseKit.configFetchedAt"
-    }
 
     /// Creates an engine.
     ///
     /// - Parameters:
     ///   - configuration: The options passed to ``ShipPulseKit/start(_:)``.
-    ///   - queue: The outbox. `nil` uses the default directory; tests pass a temporary one.
+    ///   - container: The on-device state. `nil` uses the default directory and
+    ///     `UserDefaults.standard`; tests pass a temporary one.
     ///   - uploader: The transport. `nil` uses ``CloudKitUploader``.
-    ///   - defaults: Storage for the install ID and sampling rates.
     ///   - context: Device and app fields stamped on every record.
     /// - Throws: ``ShipPulseKitError/iCloudContainerUnavailable(containerIdentifier:reason:)``
     ///   when ``CloudKitUploader`` can't open the container.
     init(
         configuration: Configuration,
-        queue: UploadQueue? = nil,
+        container: DataContainer? = nil,
         uploader: (any RecordUploading)? = nil,
-        defaults: UserDefaults = .standard,
         context: RecordContext = DeviceContext.current()
     ) throws(ShipPulseKitError) {
         self.configuration = configuration
-        self.queue = queue ?? UploadQueue(directory: UploadQueue.defaultDirectory(), maxAge: configuration.maxQueueAge, maxCount: configuration.maxQueuedRecords)
+        self.container = container ?? DataContainer(maxAge: configuration.maxQueueAge, maxCount: configuration.maxQueuedRecords)
         if let uploader {
             self.uploader = uploader
         } else {
             self.uploader = try CloudKitUploader(configuration: configuration)
         }
-        self.defaults = defaults
-        self.retention = RetentionTracker(defaults: defaults)
         self.context = context
     }
 
     #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
     private var collector: MetricKitCollector?
+    /// The MetricKit manager, once ``start()`` has run.
+    ///
+    /// ``ShipPulseKit/trackLaunchTask(_:_:)`` needs the same manager that collects reports,
+    /// so launch tasks count toward this app's extended launch metric.
     var metricManager: MetricManager? { collector?.manager }
     #endif
 
@@ -68,8 +63,9 @@ final class Engine {
         let fallback = context
         #if !os(visionOS)
         if configuration.collectsMetrics {
-            let installID = retention.installID()
+            let container = container
             collector.startMetrics { [weak self] report in
+                let installID = await container.installID()
                 let record = PayloadMapper.summaryRecord(
                     report: ReportMapper.dailyReport(from: report),
                     rawJSON: try? JSONEncoder().encode(report),
@@ -133,17 +129,29 @@ final class Engine {
     /// Queues the install and daily-open records for this launch or foreground.
     func recordActivity() {
         guard configuration.tracksRetention else { return }
-        let records = retention.records(at: Date(), context: context)
-        Task { await enqueue(records) }
+        let now = Date(), context = context
+        Task {
+            let records = await container.updateRetention { RetentionTracker.records(for: $0, at: now, context: context) }
+            await enqueue(records)
+        }
     }
 
-    /// Samples records, stamps the rate, writes them to the queue and uploads.
+    /// Samples records, stamps the rate, writes them to ``DataContainer`` and uploads.
     ///
     /// - Parameter records: New records from any collection source.
     func enqueue(_ records: [PendingRecord]) async {
-        let admitted = records.filter(isSampledIn).map(stampingRate)
+        let installID = await container.installID()
+        let rates = await sampleRates()
+        let admitted = records.compactMap { record -> PendingRecord? in
+            let rate = record.kind == .diagnosticPayload ? rates.diagnostic : rates.metric
+            guard Sampling.includes(installID: installID, rate: rate) else { return nil }
+            // Readers divide counts by the rate to estimate the full population.
+            var record = record
+            record.fields[Schema.Field.sampleRate] = .double(rate)
+            return record
+        }
         guard !admitted.isEmpty else { return }
-        try? await queue.enqueue(admitted)
+        try? await container.enqueue(admitted)
         await flush()
     }
 
@@ -167,54 +175,44 @@ final class Engine {
 
     private func drainQueue() async {
         guard await uploader.isAvailable() else { return }
-        while let batch = try? await queue.pending(limit: 100), !batch.isEmpty {
+        while let batch = try? await container.pending(limit: 100), !batch.isEmpty {
             guard let accepted = try? await uploader.upload(batch), !accepted.isEmpty else { return }
-            await queue.remove(accepted)
+            await container.remove(accepted)
             if accepted.count < batch.count { return }
         }
     }
 
     // MARK: Sampling
 
-    /// The current sampling rate.
+    /// The current sampling rates.
     ///
-    /// A ``SamplingMode/fixed(_:)`` configuration wins; otherwise it is the last `SPConfig`
+    /// A ``SamplingMode/fixed(_:)`` configuration wins; otherwise each is the last `SPConfig`
     /// rate seen, or `1`.
-    var sampleRate: Double { rate(for: configuration.sampling, key: Key.sampleRate) }
-    /// The current diagnostic sampling rate, resolved like ``sampleRate``.
-    var diagnosticSampleRate: Double { rate(for: configuration.diagnosticSampling, key: Key.diagnosticSampleRate) }
+    ///
+    /// - Returns: The rate for metric and retention records, and the rate for diagnostics.
+    func sampleRates() async -> (metric: Double, diagnostic: Double) {
+        let stored = await container.sampling()
+        return (
+            Self.rate(for: configuration.sampling, stored: stored.sampleRate),
+            Self.rate(for: configuration.diagnosticSampling, stored: stored.diagnosticSampleRate)
+        )
+    }
 
-    private func rate(for mode: SamplingMode, key: String) -> Double {
+    private nonisolated static func rate(for mode: SamplingMode, stored: Double?) -> Double {
         switch mode {
         case .fixed(let value): return max(0, min(1, value))
-        case .automatic: return defaults.object(forKey: key) as? Double ?? 1
+        case .automatic: return stored ?? 1
         }
-    }
-
-    private func isSampledIn(_ record: PendingRecord) -> Bool {
-        let rate = record.kind == .diagnosticPayload ? diagnosticSampleRate : sampleRate
-        return Sampling.includes(installID: retention.installID(), rate: rate)
-    }
-
-    /// Stamps the record's sampling rate. Readers divide counts by it to estimate the full
-    /// population.
-    private func stampingRate(_ record: PendingRecord) -> PendingRecord {
-        var record = record
-        let rate = record.kind == .diagnosticPayload ? diagnosticSampleRate : sampleRate
-        record.fields[Schema.Field.sampleRate] = .double(rate)
-        return record
     }
 
     /// Refreshes the rates the ShipPulse app publishes, at most once a day.
     ///
     /// - Parameter now: The current date.
     func refreshSamplingConfig(now: Date = Date()) async {
-        let fetchedAt = defaults.object(forKey: Key.configFetchedAt) as? Date ?? .distantPast
+        let fetchedAt = await container.sampling().fetchedAt ?? .distantPast
         guard now.timeIntervalSince(fetchedAt) > 24 * 60 * 60 else { return }
         guard let config = await uploader.fetchSamplingConfig(bundleID: context.bundleIdentifier) else { return }
-        defaults.set(config.sampleRate, forKey: Key.sampleRate)
-        defaults.set(config.diagnosticSampleRate, forKey: Key.diagnosticSampleRate)
-        defaults.set(now, forKey: Key.configFetchedAt)
+        await container.saveSampling(config, fetchedAt: now)
     }
 
     private func observeForeground() {

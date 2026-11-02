@@ -8,10 +8,17 @@ import ShipPulseKitCore
 /// Metric reports arrive about once a day per device. Diagnostic reports arrive as they
 /// occur, delivered on a later launch. visionOS has no metric reports, only diagnostics.
 ///
-/// `@unchecked Sendable`: `tasks` is written only from ``Engine`` on the main actor, and
-/// `MetricManager` is not marked `Sendable` by MetricKit.
-final class MetricKitCollector: @unchecked Sendable {
+/// Main-actor isolated because ``Engine``, which creates and owns it, lives there. The
+/// listening tasks run off the main actor and capture only the report stream and the
+/// `@Sendable` callback, never the collector.
+@MainActor
+final class MetricKitCollector {
+    /// The manager whose report streams this collector reads.
+    ///
+    /// It is shared with ``Engine/metricManager`` because launch-task tracking must use the
+    /// manager that collects the reports.
     let manager: MetricManager
+    /// The stream listeners, cancelled when the collector goes away.
     private var tasks: [Task<Void, Never>] = []
 
     /// Creates a collector.
@@ -32,9 +39,10 @@ final class MetricKitCollector: @unchecked Sendable {
     /// - Parameter onReport: Called for each metric report.
     func startMetrics(onReport: @escaping @Sendable (MetricReport) async -> Void) {
         let reports = manager.metricReports
-        tasks.append(Task.detached(priority: .utility) {
+        let task = Task.detached(priority: .utility) {
             for await report in reports { await onReport(report) }
-        })
+        }
+        tasks.append(task)
     }
     #endif
 
@@ -43,12 +51,14 @@ final class MetricKitCollector: @unchecked Sendable {
     /// - Parameter onReport: Called for each diagnostic report.
     func startDiagnostics(onReport: @escaping @Sendable (DiagnosticReport) async -> Void) {
         let diagnostics = manager.diagnosticReports
-        tasks.append(Task.detached(priority: .utility) {
+        let task = Task.detached(priority: .utility) {
             for await report in diagnostics { await onReport(report) }
-        })
+        }
+        tasks.append(task)
     }
 
-    deinit {
+    /// Cancels the stream listeners, so no report is handled after the engine is gone.
+    isolated deinit {
         tasks.forEach { $0.cancel() }
     }
 }
@@ -80,8 +90,7 @@ enum ReportMapper {
     ///
     /// - Parameter results: The results of one interval or state entry.
     /// - Returns: The flattened summary.
-    // swiftlint:disable:next cyclomatic_complexity function_body_length
-    static func summary(_ results: [MetricResult]) -> MetricSummary {
+    static func summary(_ results: [MetricResult]) -> MetricSummary { // swiftlint:disable:this cyclomatic_complexity function_body_length
         var s = MetricSummary()
         for result in results {
             switch result {

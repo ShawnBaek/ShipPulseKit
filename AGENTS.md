@@ -19,8 +19,9 @@ Sources/ShipPulseKitCore/     Pure Swift, no Apple-UI or CloudKit: Schema, Metri
                               DailyReport, Histogram, Aggregation, Sampling.
                               Also imported by the ShipPulse app.
 Sources/ShipPulseKit/         The SDK: Engine, MetricKitCollector, ReportMapper,
-                              UploadQueue (offline-first), CloudKitUploader,
-                              RetentionTracker, ScreenReporter, Hitches/*
+                              DataContainer (sole owner of on-device state: queued
+                              records and UserDefaults keys), CloudKitUploader,
+                              RetentionTracker (pure), ScreenReporter, Hitches/*
 Sources/ShipPulseKitObjC/     One function: catches the NSException CloudKit raises when the
                               host app has no iCloud entitlement.
 CloudKit/ShipPulseKit.ckdb    Schema fragment, merged into each host container
@@ -67,7 +68,7 @@ Import replaces the whole schema of the target environment.
 3. **Record names stay deterministic.** Retries and redelivered reports must overwrite, not
    duplicate. Use `Sampling.stableHash` (FNV-1a), never `hashValue`, which is seeded per
    process.
-4. **Offline first.** Write every record to `UploadQueue` before uploading, and remove it
+4. **Offline first.** Write every record to `DataContainer` before uploading, and remove it
    only after CloudKit accepts it.
 5. **Record every MetricKit metric.**
    - When Apple adds a `MetricResult` case, map it in `ReportMapper.summary` with a
@@ -91,7 +92,7 @@ Import replaces the whole schema of the target environment.
      `nonisolated(unsafe)` or `@preconcurrency` to silence a diagnostic.
    - Prefer actors and `@MainActor`; use checked `Sendable` value types, `sending`
      parameters and results, and `@Sendable` closures to move values across isolation.
-   - When a framework type isn't `Sendable` (for example `MetricManager`), keep it inside
+   - When a framework type isn't `Sendable` (for example `UserDefaults`), keep it inside
      one actor or the main actor and pass only `Sendable` values out. For shared mutable
      state that can't live in an actor, use `Mutex` from `Synchronization`.
 9. **Platform guards:** MetricKit is unavailable on watchOS and tvOS. On visionOS,
@@ -101,6 +102,8 @@ Import replaces the whole schema of the target environment.
    (and `iOS`, `watchOS`).
 10. **Keep Core portable.** `ShipPulseKitCore` must not import MetricKit, CloudKit, UIKit or
     SwiftUI.
+11. **Versions are `major.minor.patch`.** Release tags are plain three-number semver with no
+    `v` prefix, like `0.1.0` and `0.2.0`. Never move a published tag.
 
 ## Testing notes
 

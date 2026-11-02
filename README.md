@@ -26,7 +26,6 @@ retention only. watchOS has no MetricKit, so it sends retention only.
   device only after CloudKit accepts it.
 
 Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-Architecture.sketch).
-The `DataContainer` split shown here lands in the next release.
 
 ## 1. Enable CloudKit
 
