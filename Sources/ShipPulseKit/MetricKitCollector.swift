@@ -2,20 +2,24 @@
 import Foundation
 import MetricKit
 import ShipPulseKitCore
-import Synchronization
 
 /// Collects iOS 27 MetricKit reports through `MetricManager`'s async streams.
 ///
 /// Metric reports arrive about once a day per device. Diagnostic reports arrive as they
 /// occur, delivered on a later launch. visionOS has no metric reports, only diagnostics.
-final class MetricKitCollector: Sendable {
+///
+/// Main-actor isolated because ``Engine``, which creates and owns it, lives there. The
+/// listening tasks run off the main actor and capture only the report stream and the
+/// `@Sendable` callback, never the collector.
+@MainActor
+final class MetricKitCollector {
     /// The manager whose report streams this collector reads.
     ///
     /// It is shared with ``Engine/metricManager`` because launch-task tracking must use the
     /// manager that collects the reports.
     let manager: MetricManager
     /// The stream listeners, cancelled when the collector goes away.
-    private let tasks = Mutex<[Task<Void, Never>]>([])
+    private var tasks: [Task<Void, Never>] = []
 
     /// Creates a collector.
     ///
@@ -38,7 +42,7 @@ final class MetricKitCollector: Sendable {
         let task = Task.detached(priority: .utility) {
             for await report in reports { await onReport(report) }
         }
-        tasks.withLock { $0.append(task) }
+        tasks.append(task)
     }
     #endif
 
@@ -50,12 +54,12 @@ final class MetricKitCollector: Sendable {
         let task = Task.detached(priority: .utility) {
             for await report in diagnostics { await onReport(report) }
         }
-        tasks.withLock { $0.append(task) }
+        tasks.append(task)
     }
 
     /// Cancels the stream listeners, so no report is handled after the engine is gone.
-    deinit {
-        tasks.withLock { $0.forEach { $0.cancel() } }
+    isolated deinit {
+        tasks.forEach { $0.cancel() }
     }
 }
 

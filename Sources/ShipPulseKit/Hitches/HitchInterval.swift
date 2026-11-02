@@ -3,7 +3,6 @@ import Foundation
 import MetricKit
 import os
 import ShipPulseKitCore
-import Synchronization
 
 /// A measured region of animation or scrolling.
 ///
@@ -14,24 +13,22 @@ import Synchronization
 ///
 /// Names are `StaticString` because MetricKit signposts require compile-time names.
 ///
-/// An interval is `Sendable`: you can end it from any thread or task, and it ends exactly
-/// once.
-public final class HitchInterval: Sendable {
+/// An interval belongs to the main actor, like the animations and scrolling it measures:
+/// every API that opens one is a main-actor UI API, so the compiler checks every use and no
+/// lock is needed. It ends exactly once, and an interval released without ``end()`` is
+/// closed automatically.
+@MainActor
+public final class HitchInterval {
     private let name: StaticString
     private let log: OSLog
     private let signpostID: OSSignpostID
-    private let isOpen = Mutex(true)
+    private var isOpen = true
 
     /// Begins the animation signpost.
-    ///
-    /// Main-actor isolated because every entry point that opens an interval is a main-actor
-    /// UI API: ``ShipPulseKit/beginHitchInterval(_:category:)``, the animation helpers and
-    /// the scroll trackers.
     ///
     /// - Parameters:
     ///   - name: The region's name, shown in ShipPulse.
     ///   - category: The signpost category; one `OSLog` is cached per category.
-    @MainActor
     init(name: StaticString, category: String) {
         self.name = name
         self.log = SignpostLogs.handle(category: category)
@@ -41,37 +38,38 @@ public final class HitchInterval: Sendable {
 
     /// Ends the interval.
     ///
-    /// Calling it more than once, from any thread, is harmless. An interval released
-    /// without `end()` is closed automatically.
+    /// Call it on the main actor. Calling it again is harmless: the signpost ends once. An
+    /// interval released without `end()` is closed automatically.
     public func end() {
-        guard isOpen.withLock({ open in
-            defer { open = false }
-            return open
-        }) else { return }
+        guard isOpen else { return }
+        isOpen = false
         mxSignpost(.end, log: log, name: name, signpostID: signpostID)
     }
 
     /// Closes an interval dropped without ``end()``, so its signpost doesn't leak.
-    deinit {
+    ///
+    /// `isolated` (SE-0371) runs it on the main actor, so it reads `isOpen` without a lock.
+    isolated deinit {
         end()
     }
 }
 
 /// Caches one `OSLog` per category, as `MetricManager.logHandle(category:)` requires.
+///
+/// Main-actor isolated because only ``HitchInterval``, which lives there, reads it.
+@MainActor
 enum SignpostLogs {
-    private static let handles = Mutex<[String: OSLog]>([:])
+    private static var handles: [String: OSLog] = [:]
 
     /// The log handle for a signpost category, created on first use.
     ///
     /// - Parameter category: The signpost category.
     /// - Returns: The cached `OSLog` from `MetricManager.logHandle(category:)`.
     static func handle(category: String) -> OSLog {
-        handles.withLock { handles in
-            if let existing = handles[category] { return existing }
-            let handle = MetricManager.logHandle(category: category)
-            handles[category] = handle
-            return handle
-        }
+        if let existing = handles[category] { return existing }
+        let handle = MetricManager.logHandle(category: category)
+        handles[category] = handle
+        return handle
     }
 }
 #endif
