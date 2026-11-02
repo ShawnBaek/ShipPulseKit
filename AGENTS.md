@@ -62,8 +62,9 @@ Import replaces the whole schema of the target environment.
    - `Sources/ShipPulseKitCore/Schema.swift`
    - `docs/CloudKitSchema.md`
 
-   Then revalidate with `cktool validate-schema`. Adding fields and types is safe. Renaming
-   or removing them breaks every integrated app, so don't, unless the user asks and the
+   Then revalidate with `cktool validate-schema`. Adding fields and types is safe for old
+   readers, as long as the schema is deployed before an app ships the change. Renaming or
+   removing them breaks every integrated app, so don't, unless the user asks and the
    `schemaVersion` is bumped. Prefer changes inside the summary JSON over new CloudKit
    fields; [docs/SchemaEvolution.md](docs/SchemaEvolution.md) has the full policy.
 3. **Record names stay deterministic.** Retries and redelivered reports must overwrite, not

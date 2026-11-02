@@ -52,12 +52,12 @@ schema to Production before shipping this version."**
 
 ## 4. Readers accept every version (migrate on read)
 
-- The ShipPulse app decodes each schema version it may find and converts it into one current
-  model in its data layer. Aggregation and UI only see that model.
+- The ShipPulse app should decode each schema version it may find and convert it into one
+  current model in its data layer, so aggregation and UI only see that model.
 - If a metric's definition changes, the app can re-derive it from the raw MetricKit report
-  JSON stored next to every summary.
-- Keep one golden JSON fixture per schema version in `Tests/ShipPulseKitTests`, and require
-  that each keeps decoding.
+  JSON, which is uploaded with a summary whenever MetricKit could encode it.
+- Keep one golden JSON fixture per schema version in `Tests/ShipPulseKitTests` (today the
+  version 1 fixture is in `CoreTests.swift`), and require that each keeps decoding.
 
 ## 5. On-device data
 
@@ -74,7 +74,7 @@ schema to Production before shipping this version."**
    `docs/CloudKitSchema.md` together.
 2. `cktool validate-schema` against Development (AGENTS.md has the command). Never run
    `import-schema` or `reset-schema` without the user's approval.
-3. Bump the minor version before 1.0, the major version after (AGENTS.md rule 11).
+3. Bump the minor version before 1.0, the major version after. Tags stay plain
+   `major.minor.patch` (AGENTS.md rule 11).
 4. Release notes give the deploy steps and the "deploy before shipping" warning.
-5. Deploy to Production in the maintainers' own apps (NativeMobile, ShadowTeep, Travelcrumb)
-   before tagging.
+5. Deploy to Production in the maintainers' own apps before tagging.
