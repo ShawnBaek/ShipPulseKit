@@ -22,6 +22,14 @@ public final class HitchInterval: Sendable {
     private let signpostID: OSSignpostID
     private let isOpen = Mutex(true)
 
+    /// Begins the animation signpost.
+    ///
+    /// Main-actor isolated because the animations and scrolling it measures run there, so
+    /// the begin signpost lands on the thread whose frames MetricKit attributes to it.
+    ///
+    /// - Parameters:
+    ///   - name: The region's name, shown in ShipPulse.
+    ///   - category: The signpost category; one `OSLog` is cached per category.
     @MainActor
     init(name: StaticString, category: String) {
         self.name = name
@@ -42,8 +50,8 @@ public final class HitchInterval: Sendable {
         mxSignpost(.end, log: log, name: name, signpostID: signpostID)
     }
 
+    /// Closes an interval dropped without ``end()``, so its signpost doesn't leak.
     deinit {
-        // An interval dropped without `end()` is closed so the signpost doesn't leak.
         end()
     }
 }
@@ -52,6 +60,10 @@ public final class HitchInterval: Sendable {
 enum SignpostLogs {
     private static let handles = Mutex<[String: OSLog]>([:])
 
+    /// The log handle for a signpost category, created on first use.
+    ///
+    /// - Parameter category: The signpost category.
+    /// - Returns: The cached `OSLog` from `MetricManager.logHandle(category:)`.
     static func handle(category: String) -> OSLog {
         handles.withLock { handles in
             if let existing = handles[category] { return existing }

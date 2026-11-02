@@ -49,6 +49,10 @@ final class Engine {
 
     #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
     private var collector: MetricKitCollector?
+    /// The MetricKit manager, once ``start()`` has run.
+    ///
+    /// ``ShipPulseKit/trackLaunchTask(_:_:)`` needs the same manager that collects reports,
+    /// so launch tasks count toward this app's extended launch metric.
     var metricManager: MetricManager? { collector?.manager }
     #endif
 

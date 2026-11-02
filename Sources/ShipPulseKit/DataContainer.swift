@@ -159,6 +159,10 @@ actor DataContainer {
         }
     }
 
+    /// The number of records waiting for upload.
+    ///
+    /// - Returns: How many pending records are on disk.
+    /// - Throws: A file-system error if the directory can't be read.
     func pendingCount() throws -> Int {
         try load().count
     }

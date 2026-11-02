@@ -9,6 +9,10 @@ import Synchronization
 /// Metric reports arrive about once a day per device. Diagnostic reports arrive as they
 /// occur, delivered on a later launch. visionOS has no metric reports, only diagnostics.
 final class MetricKitCollector: Sendable {
+    /// The manager whose report streams this collector reads.
+    ///
+    /// It is shared with ``Engine/metricManager`` because launch-task tracking must use the
+    /// manager that collects the reports.
     let manager: MetricManager
     /// The stream listeners, cancelled when the collector goes away.
     private let tasks = Mutex<[Task<Void, Never>]>([])
@@ -49,6 +53,7 @@ final class MetricKitCollector: Sendable {
         tasks.withLock { $0.append(task) }
     }
 
+    /// Cancels the stream listeners, so no report is handled after the engine is gone.
     deinit {
         tasks.withLock { $0.forEach { $0.cancel() } }
     }
@@ -81,8 +86,7 @@ enum ReportMapper {
     ///
     /// - Parameter results: The results of one interval or state entry.
     /// - Returns: The flattened summary.
-    // swiftlint:disable:next cyclomatic_complexity function_body_length
-    static func summary(_ results: [MetricResult]) -> MetricSummary {
+    static func summary(_ results: [MetricResult]) -> MetricSummary { // swiftlint:disable:this cyclomatic_complexity function_body_length
         var s = MetricSummary()
         for result in results {
             switch result {
