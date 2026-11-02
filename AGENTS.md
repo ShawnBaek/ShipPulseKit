@@ -102,6 +102,8 @@ Import replaces the whole schema of the target environment.
    (and `iOS`, `watchOS`).
 10. **Keep Core portable.** `ShipPulseKitCore` must not import MetricKit, CloudKit, UIKit or
     SwiftUI.
+11. **Versions are `major.minor.patch`.** Release tags are plain three-number semver with no
+    `v` prefix, like `0.1.0` and `0.2.0`. Never move a published tag.
 
 ## Testing notes
 
