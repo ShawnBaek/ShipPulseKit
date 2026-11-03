@@ -64,7 +64,8 @@ One role and five record types, all in the container's **public** database.
 | `SPActiveDay` | install and UTC day the app was opened | `day`, `daysSinceInstall`: the numerator for retention |
 | `SPConfig` | app | `sampleRate`, `diagnosticSampleRate`, which the SDK reads once a day |
 
-Every type also carries `bundleID`, `appVersion`, `build`, `osVersion` and `device`.
+The four SDK types also carry `bundleID`, `appVersion`, `build`, `osVersion`, `device` and
+`sampleRate`.
 
 Permissions:
 
