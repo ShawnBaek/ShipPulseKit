@@ -90,10 +90,17 @@ xcrun cktool import-schema --team-id TEAM --container-id iCloud.com.you.app --en
 
 Then:
 
-1. In CloudKit Console, open **Security Roles** and assign `ShipPulseAdmin` to your iCloud user.
-2. Before your first TestFlight or App Store build, deploy the schema to **Production** in
+1. Before your first TestFlight or App Store build, deploy the schema to **Production** in
    CloudKit Console (**Deploy Schema Changes**). Release builds write to Production; until
-   the schema is there, their records stay queued on the device.
+   the schema is there, their records stay queued on the device. Deploy ships every pending
+   Development change, so in a container your app already uses, check that the diff lists
+   only the ShipPulseKit role and record types (plus the `Users` index from step 2, if you
+   added it).
+2. Optional: assign `ShipPulseAdmin` to your iCloud user in each environment. You need it
+   only to change `SPConfig` or delete old records. The **Security Roles** page only
+   defines the role. To assign it, open **Records**, query `Users` in the public database
+   and add the role to your user record. The query needs a queryable `recordName` index
+   on `Users`, which the default schema lacks: add it in Development and deploy it.
 
 ## Privacy
 
