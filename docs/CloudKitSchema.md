@@ -94,7 +94,8 @@ Then:
    CloudKit Console (**Deploy Schema Changes**). Release builds write to Production; until
    the schema is there, their records stay queued on the device. Deploy ships every pending
    Development change, so in a container your app already uses, check that the diff lists
-   only the ShipPulseKit role and record types.
+   only the ShipPulseKit role and record types (plus the `Users` index from step 2, if you
+   added it).
 2. Optional: assign `ShipPulseAdmin` to your iCloud user in each environment. You need it
    only to change `SPConfig` or delete old records. The **Security Roles** page only
    defines the role. To assign it, open **Records**, query `Users` in the public database

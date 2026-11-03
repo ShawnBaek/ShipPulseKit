@@ -30,8 +30,8 @@ Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-
 ## 1. Enable CloudKit
 
 1. Pick a container. **The container your app already uses is fine.** ShipPulseKit only adds
-   `SP`-prefixed record types to the public database. It doesn't touch your record types,
-   your records or your private database, so Core Data or SwiftData sync keeps working.
+   `SP`-prefixed record types to the public database (the default). It doesn't touch your
+   record types, your records or your private database, so Core Data or SwiftData sync keeps working.
    - **Your app already has iCloud with CloudKit:** there is nothing to configure. Call
      `start()` without arguments and the SDK uses the first container in your entitlements.
    - **You want a separate container** (to keep metrics apart, or because the first
@@ -50,8 +50,8 @@ Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-
    schema is in Production, nothing arrives: release builds keep records on the device for up
    to 30 days (at most 500 records), then drop the oldest. In a shared container, Deploy
    ships *every* pending Development change, so check that the diff lists only the
-   ShipPulseKit role and record types.
-4. Optional: give your own iCloud user the `ShipPulseAdmin` role. You only need it to change
+   ShipPulseKit role and record types (plus the `Users` index from step 4, if you added it).
+4. Optional: give your own iCloud user the `ShipPulseAdmin` role, in each environment. You only need it to change
    sampling rates or delete old records; collecting and reading work without it. The
    **Security Roles** page defines what the role can do; it doesn't assign it. To assign
    it, open the environment's **Records** page, query `Users` in the public database, and
