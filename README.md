@@ -29,24 +29,35 @@ Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-
 
 ## 1. Enable CloudKit
 
-1. Create a container just for metrics, for example `iCloud.<bundle ID>.shippulse`, so the
-   ShipPulseKit record types stay out of your app's own data. In Xcode, open
-   **Signing & Capabilities → + iCloud**, check **CloudKit** and add that container, on
-   every platform target that runs the SDK. Pass it to
-   `Configuration(containerIdentifier:)`; without it, the SDK uses the first container in
-   your entitlements.
+1. Pick a container. **The container your app already uses is fine.** ShipPulseKit only adds
+   `SP`-prefixed record types to the public database. It doesn't touch your record types,
+   your records or your private database, so Core Data or SwiftData sync keeps working.
+   - **Your app already has iCloud with CloudKit:** there is nothing to configure. Call
+     `start()` without arguments and the SDK uses the first container in your entitlements.
+   - **You want a separate container** (to keep metrics apart, or because the first
+     container in your entitlements isn't the one you want): in Xcode, open
+     **Signing & Capabilities → + iCloud**, check **CloudKit** and add it, on every
+     platform target that runs the SDK. Then pass it to
+     `Configuration(containerIdentifier:)`.
 2. Import [`CloudKit/ShipPulseKit.ckdb`](CloudKit/ShipPulseKit.ckdb) into the
    **Development** environment with `xcrun cktool import-schema`. Import **replaces** the
    environment's whole schema, so export the current schema and merge the file into it
-   first, keeping the default `Users` type. The commands are in
+   first. That keeps your existing record types and the default `Users` type. The commands are in
    [docs/CloudKitSchema.md](docs/CloudKitSchema.md#installing-the-schema).
-3. In CloudKit Console, open **Security Roles** and assign `ShipPulseAdmin` to your iCloud
-   user.
-4. Before your first TestFlight or App Store build, deploy the schema to **Production**:
+3. Before your first TestFlight or App Store build, deploy the schema to **Production**:
    CloudKit Console → your container → **Deploy Schema Changes**. Debug builds write to the
    Development environment; TestFlight and App Store builds write to Production. Until the
    schema is in Production, nothing arrives: release builds keep records on the device for up
-   to 30 days (at most 500 records), then drop the oldest.
+   to 30 days (at most 500 records), then drop the oldest. In a shared container, Deploy
+   ships *every* pending Development change, so check that the diff lists only the
+   ShipPulseKit role and record types.
+4. Optional: give your own iCloud user the `ShipPulseAdmin` role. You only need it to change
+   sampling rates or delete old records; collecting and reading work without it. The
+   **Security Roles** page defines what the role can do; it doesn't assign it. To assign
+   it, open the environment's **Records** page, query `Users` in the public database, and
+   add the role to your user record. If that query fails, `Users` has no queryable
+   `recordName` index; add one in Development and deploy it. Your user record exists only
+   after your iCloud account has used the container in that environment.
 
 If automatic signing fails with "iCloud Container … is not available", the App ID may still
 be linked to a container that no longer exists on your team. Remove the iCloud capability
