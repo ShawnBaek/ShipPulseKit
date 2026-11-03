@@ -29,16 +29,55 @@ Source: [docs/design/ShipPulseKit-Architecture.sketch](docs/design/ShipPulseKit-
 
 ## 1. Enable CloudKit
 
-1. In Xcode, open **Signing & Capabilities → + iCloud** and check **CloudKit**. Pick a
-   container.
-2. Add the ShipPulseKit record types to that container. See
+1. Create a container just for metrics, for example `iCloud.<bundle ID>.shippulse`, so the
+   ShipPulseKit record types stay out of your app's own data. In Xcode, open
+   **Signing & Capabilities → + iCloud**, check **CloudKit** and add that container, on
+   every platform target that runs the SDK. Pass it to
+   `Configuration(containerIdentifier:)`; without it, the SDK uses the first container in
+   your entitlements.
+2. Import [`CloudKit/ShipPulseKit.ckdb`](CloudKit/ShipPulseKit.ckdb) into the
+   **Development** environment with `xcrun cktool import-schema`. Import **replaces** the
+   environment's whole schema, so export the current schema and merge the file into it
+   first, keeping the default `Users` type. The commands are in
    [docs/CloudKitSchema.md](docs/CloudKitSchema.md#installing-the-schema).
-3. In CloudKit Console, assign the `ShipPulseAdmin` role to your iCloud user.
+3. In CloudKit Console, open **Security Roles** and assign `ShipPulseAdmin` to your iCloud
+   user.
 4. Before your first TestFlight or App Store build, deploy the schema to **Production**:
    CloudKit Console → your container → **Deploy Schema Changes**. Debug builds write to the
    Development environment; TestFlight and App Store builds write to Production. Until the
    schema is in Production, nothing arrives: release builds keep records on the device for up
    to 30 days (at most 500 records), then drop the oldest.
+
+If automatic signing fails with "iCloud Container … is not available", the App ID may still
+be linked to a container that no longer exists on your team. Remove the iCloud capability
+from the App ID in the developer portal and add it back to clear the stale link.
+
+### What the schema adds
+
+One role and five record types, all in the container's **public** database.
+
+| Record type | One record per | Key fields |
+| --- | --- | --- |
+| `SPMetricSummary` | install and MetricKit report (about a day) | Queryable: `bundleID`, `build`, `device`, `timeBegin`, `isTestFlight`. Payload: `summary` (every metric) and `report` (raw MetricKit JSON), both zlib |
+| `SPDiagnosticPayload` | crash, hang, launch, CPU, disk-write or memory diagnostic | Queryable: `kind`, `durationMs`, `terminationCategory`, `signal`, `exceptionType`. Payload: `payload` (call stacks, zlib JSON) |
+| `SPInstall` | install | `installID`, `firstLaunch`: the denominator for retention |
+| `SPActiveDay` | install and UTC day the app was opened | `day`, `daysSinceInstall`: the numerator for retention |
+| `SPConfig` | app | `sampleRate`, `diagnosticSampleRate`, which the SDK reads once a day |
+
+Every type also carries `bundleID`, `appVersion`, `build`, `osVersion` and `device`.
+
+Permissions:
+
+- `_icloud` can **create** records of the four SDK types, so any device signed in to iCloud
+  adds its own.
+- `_creator` can **write** only the records it created, so retried uploads overwrite instead
+  of duplicating.
+- `_world` can **read**, so the ShipPulse app can read with your container's API token.
+- `ShipPulseAdmin` is the role you assign to your own iCloud user. It can write every type,
+  to prune old records, and it is the only role that can create or write `SPConfig`, so
+  nobody else can change your sampling rates.
+
+Full field list and queries: [docs/CloudKitSchema.md](docs/CloudKitSchema.md).
 
 Without a usable container, `start()` throws a `ShipPulseKitError` whose `code` is
 `.iCloudContainerUnavailable` instead of crashing. CloudKit raises an Objective-C exception in that case, which Swift
