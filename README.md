@@ -15,6 +15,12 @@ Requires iOS, macOS, watchOS or visionOS 27+. Test on a physical device; MetricK
 report in the Simulator. visionOS has no daily metric reports, so it sends diagnostics and
 retention only. watchOS has no MetricKit, so it sends retention only.
 
+**Integrating with an AI coding agent?** Point it at
+[`skills/integrate-shippulsekit/SKILL.md`](skills/integrate-shippulsekit/SKILL.md), or copy
+that folder into your project's agent skills (for Claude Code, `.claude/skills/`). It walks
+the agent through choosing the container, starting the SDK, installing the CloudKit schema
+safely, and checking that records arrive.
+
 ## Architecture
 
 ![ShipPulseKit architecture](docs/design/architecture.png)

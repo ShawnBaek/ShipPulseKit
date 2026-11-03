@@ -2,6 +2,9 @@
 
 Guidance for coding agents (Claude Code, Codex and others) working in this repository.
 
+To add ShipPulseKit to an app instead, follow
+[skills/integrate-shippulsekit/SKILL.md](skills/integrate-shippulsekit/SKILL.md).
+
 ## What this is
 
 ShipPulseKit is a Swift package that third-party apps embed. It collects MetricKit metrics
@@ -28,6 +31,7 @@ CloudKit/ShipPulseKit.ckdb    Schema fragment, merged into each host container
 docs/                         CloudKitSchema.md, HitchTracking.md
 Sources/*/*.docc/             DocC landing pages (Product → Build Documentation in Xcode)
 Tests/ShipPulseKitTests/      Swift Testing
+skills/                       Agent skill for apps integrating the SDK
 ```
 
 ## Commands
@@ -88,7 +92,8 @@ Import replaces the whole schema of the target environment.
    - Hitch region names are `StaticString`, because MetricKit requires it.
    - Keep entry points small: `start`, `flush`, `reportScreen`, `trackLaunchTask`, the hitch
      APIs, and the SwiftUI and UIKit extensions.
-   - Update `README.md` when the API changes.
+   - Update `README.md` and `skills/integrate-shippulsekit/SKILL.md` when the API or the
+     setup steps change.
 8. **Swift 6 strict concurrency.**
    - The compiler must prove every concurrency boundary. Don't use `@unchecked Sendable`,
      `nonisolated(unsafe)` or `@preconcurrency` to silence a diagnostic.
