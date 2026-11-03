@@ -132,6 +132,11 @@ Prerequisites:
 - Ask once for the team ID.
 - `xcrun cktool save-token` must already be done by the person.
 
+If the exported schema already has `SPMetricSummary` or `CREATE ROLE ShipPulseAdmin`, the
+schema is already installed. Don't merge again, because that would duplicate it; compare the
+existing `SP*` types with the package's `ShipPulseKit.ckdb` and report any differences to the
+person instead.
+
 1. **Back up and merge** (read-only):
 
    ```bash
