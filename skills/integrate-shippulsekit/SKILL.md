@@ -57,7 +57,7 @@ which ones are in use; unused configurations can be skipped.
 1. Add the package, then add the `ShipPulseKit` product to each target:
 
    ```swift
-   .package(url: "https://github.com/ShawnBaek/ShipPulseKit.git", from: "0.2.1")
+   .package(url: "https://github.com/ShawnBaek/ShipPulseKit.git", from: "0.2.2")
    ```
 
    Check the latest release tag first; tags are plain `major.minor.patch`.

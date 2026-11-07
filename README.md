@@ -111,7 +111,7 @@ without metrics.
 ## 2. Install
 
 ```swift
-.package(url: "https://github.com/ShawnBaek/ShipPulseKit.git", from: "0.2.1")
+.package(url: "https://github.com/ShawnBaek/ShipPulseKit.git", from: "0.2.2")
 ```
 
 ## 3. Start
