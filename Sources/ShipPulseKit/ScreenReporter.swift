@@ -1,6 +1,6 @@
 import Foundation
 import ShipPulseKitCore
-import StateReporting
+@_weakLinked import StateReporting
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
@@ -13,10 +13,22 @@ import UIKit
 final class ScreenReporter: Sendable {
     static let shared = ScreenReporter()
 
-    private let reporter = StateReporter<Never, Never>.reporter(for: Schema.screenDomain)
+    /// `nil` when ``MetricKitSupport`` found the OS incomplete, which makes ``report(_:)``
+    /// do nothing.
+    private let reporter: StateReporter<Never, Never>?
+
+    /// Whether reports reach StateReporting.
+    var isReporting: Bool { reporter != nil }
+
+    /// Creates a reporter.
+    ///
+    /// - Parameter isMetricKitAvailable: Whether StateReporting may be called.
+    init(isMetricKitAvailable: Bool = MetricKitSupport.isAvailable) {
+        reporter = isMetricKitAvailable ? StateReporter<Never, Never>.reporter(for: Schema.screenDomain) : nil
+    }
 
     func report(_ screen: String?) {
-        reporter.reportTransition(to: screen)
+        reporter?.reportTransition(to: screen)
     }
 
     /// Shortens a `#fileID` to its last two path components.

@@ -15,6 +15,11 @@ Requires iOS, macOS, watchOS or visionOS 27+. Test on a physical device; MetricK
 report in the Simulator. visionOS has no daily metric reports, so it sends diagnostics and
 retention only. watchOS has no MetricKit, so it sends retention only.
 
+MetricKit is weak-linked, so an OS seed that lacks part of its Swift API can't crash your app
+at launch. There, `start()` does nothing and the other APIs have no effect. You don't need a
+linker setting or a check of your own, but if your app also imports MetricKit and uses a
+missing symbol, your own reference still has to be weak-linked.
+
 **Integrating with an AI coding agent?** Point it at
 [`skills/integrate-shippulsekit/SKILL.md`](skills/integrate-shippulsekit/SKILL.md), or copy
 that folder into your project's agent skills (for Claude Code, `.claude/skills/`). It walks

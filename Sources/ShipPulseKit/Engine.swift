@@ -4,7 +4,7 @@ import ShipPulseKitCore
 import UIKit
 #endif
 #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
-import MetricKit
+@_weakLinked import MetricKit
 #endif
 
 /// Connects the collection sources to sampling, ``DataContainer`` and the uploader.

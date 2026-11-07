@@ -1,7 +1,8 @@
 import Foundation
+import os
 import ShipPulseKitCore
 #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
-import MetricKit
+@_weakLinked import MetricKit
 #endif
 
 /// The entry point to ShipPulseKit.
@@ -28,6 +29,10 @@ public enum ShipPulseKit {
     /// }
     /// ```
     ///
+    /// On an OS seed that lacks part of the Swift MetricKit API, this returns without
+    /// starting anything, and every other ShipPulseKit API does nothing or just runs your
+    /// code. The app needs no check of its own.
+    ///
     /// - Parameter configuration: Where records go and what is collected. The default
     ///   writes everything to the public database of the first container in the app's
     ///   entitlements.
@@ -36,6 +41,16 @@ public enum ShipPulseKit {
     ///   ``ShipPulseKitError/Code/alreadyStarted`` on a second call.
     @MainActor
     public static func start(_ configuration: Configuration = Configuration()) throws(ShipPulseKitError) {
+        try start(configuration, isMetricKitAvailable: MetricKitSupport.isAvailable)
+    }
+
+    /// ``start(_:)`` with the MetricKit check passed in, so tests can reach the missing case.
+    @MainActor
+    static func start(_ configuration: Configuration, isMetricKitAvailable: Bool) throws(ShipPulseKitError) {
+        guard isMetricKitAvailable else {
+            Logger(subsystem: "ShipPulseKit", category: "Engine").notice("ShipPulseKit is off: this OS build lacks part of the Swift MetricKit API.")
+            return
+        }
         guard engine == nil else { throw .alreadyStarted }
         let engine = try Engine(configuration: configuration)
         self.engine = engine
@@ -82,7 +97,8 @@ public enum ShipPulseKit {
     /// }
     /// ```
     ///
-    /// Before ``start(_:)`` succeeds, the operation simply runs untracked.
+    /// Before ``start(_:)`` succeeds, or when it did nothing because the OS lacks part of the
+    /// Swift MetricKit API, the operation simply runs untracked.
     ///
     /// - Parameters:
     ///   - name: A stable name for the task, shown in ShipPulse.
