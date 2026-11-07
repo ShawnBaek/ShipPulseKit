@@ -103,9 +103,10 @@ Permissions:
 Full field list and queries: [docs/CloudKitSchema.md](docs/CloudKitSchema.md).
 
 Without a usable container, `start()` throws a `ShipPulseKitError` whose `code` is
-`.iCloudContainerUnavailable` instead of crashing. CloudKit raises an Objective-C exception in that case, which Swift
-can't catch; ShipPulseKit catches it and rethrows it as this error, so your app keeps
-running without metrics.
+`.iCloudContainerUnavailable` instead of crashing. CloudKit would crash an app that lacks
+the entitlement, in a way no code can catch, so ShipPulseKit reads the entitlements from
+your app's executable first and doesn't call CloudKit without them. Your app keeps running
+without metrics.
 
 ## 2. Install
 

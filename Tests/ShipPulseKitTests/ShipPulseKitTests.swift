@@ -330,6 +330,243 @@ private actor RecordingUploader: RecordUploading {
     }
 }
 
+@Suite struct CloudKitEntitlementsTests {
+    private let usable = CloudKitEntitlements(services: ["CloudKit"], containers: ["iCloud.com.example.a", "iCloud.com.example.b"])
+
+    @Test func allowsTheDefaultAndAnyListedContainer() {
+        #expect(usable.problem(opening: nil) == nil)
+        #expect(usable.problem(opening: "iCloud.com.example.b") == nil)
+        #expect(CloudKitEntitlements(services: ["*"], containers: ["iCloud.x"]).problem(opening: nil) == nil)
+    }
+
+    @Test func rejectsMissingEntitlements() {
+        #expect(CloudKitEntitlements(services: [], containers: ["iCloud.x"]).problem(opening: nil) != nil)
+        #expect(CloudKitEntitlements(services: ["CloudDocuments"], containers: ["iCloud.x"]).problem(opening: nil) != nil)
+        #expect(CloudKitEntitlements(services: ["CloudKit"], containers: []).problem(opening: nil) != nil)
+        #expect(usable.problem(opening: "iCloud.com.other") != nil)
+    }
+
+    @Test func readsAPropertyList() throws {
+        let services = try #require(CloudKitEntitlements(propertyList: MachOFixture.plist(services: ["CloudKit"], containers: ["iCloud.x"])))
+        #expect(services == CloudKitEntitlements(services: ["CloudKit"], containers: ["iCloud.x"]))
+
+        let wildcard = try PropertyListSerialization.data(fromPropertyList: ["com.apple.developer.icloud-services": "*"], format: .xml, options: 0)
+        #expect(CloudKitEntitlements(propertyList: wildcard)?.services == ["*"])
+        #expect(CloudKitEntitlements(propertyList: Data("not a plist".utf8)) == nil)
+    }
+
+    /// Everything reaching `CKContainer` is gated here: with nothing granted it must not be called.
+    @Test func uploaderThrowsWithoutTouchingCloudKit() {
+        let cases: [(CloudKitEntitlements?, String?)] = [
+            (nil, nil),
+            (nil, "iCloud.com.example.a"),
+            (CloudKitEntitlements(services: [], containers: []), nil),
+            (usable, "iCloud.com.other"),
+        ]
+        for (entitlements, identifier) in cases {
+            #expect(throws: ShipPulseKitError.self) {
+                _ = try CloudKitUploader(configuration: Configuration(containerIdentifier: identifier), entitlements: entitlements)
+            }
+        }
+    }
+
+    /// This test process has no iCloud entitlement, which used to crash in CloudKit.
+    @MainActor
+    @Test func startThrowsInAProcessWithoutEntitlements() throws {
+        do {
+            try ShipPulseKit.start(Configuration(), isMetricKitAvailable: true)
+            Issue.record("start() should have thrown")
+        } catch {
+            #expect(error.code == .iCloudContainerUnavailable)
+        }
+    }
+}
+
+@Suite struct MachOEntitlementsTests {
+    private let plist = MachOFixture.plist(services: ["CloudKit"], containers: ["iCloud.x"])
+    private let arm64 = MachOEntitlements.cpuARM64
+
+    @Test func readsTheCodeSignatureOfAThinBinary() {
+        #expect(MachOEntitlements.propertyList(in: MachOFixture.thin(signature: plist), cpuType: arm64) == plist)
+    }
+
+    /// arm64_32 watches run 32-bit Mach-O files.
+    @Test func readsA32BitBinary() {
+        let file = MachOFixture.thin(signature: plist, is64Bit: false)
+        #expect(MachOEntitlements.propertyList(in: file, cpuType: MachOEntitlements.cpuARM64_32) == plist)
+    }
+
+    @Test func picksTheMatchingSliceOfAUniversalBinary() {
+        let other = MachOFixture.plist(services: [], containers: [])
+        for is64 in [false, true] {
+            let file = MachOFixture.universal(
+                [(MachOEntitlements.cpuX86_64, MachOFixture.thin(signature: other)), (arm64, MachOFixture.thin(signature: plist))],
+                is64: is64
+            )
+            #expect(MachOEntitlements.propertyList(in: file, cpuType: arm64) == plist)
+            #expect(MachOEntitlements.propertyList(in: file, cpuType: MachOEntitlements.cpuX86_64) == other)
+            #expect(MachOEntitlements.propertyList(in: file, cpuType: MachOEntitlements.cpuARM64_32) == nil)
+        }
+    }
+
+    /// Simulator signatures hold unrelated entitlements, so the section must win.
+    @Test func prefersTheSimulatorSectionOverTheSignature() {
+        let signed = MachOFixture.plist(services: [], containers: [])
+        let file = MachOFixture.thin(signature: signed, section: plist)
+        #expect(MachOEntitlements.propertyList(in: file, cpuType: arm64) == plist)
+    }
+
+    @Test func aBinaryWithoutEntitlementsHasNone() {
+        #expect(MachOEntitlements.propertyList(in: MachOFixture.thin(), cpuType: arm64) == nil)
+    }
+
+    /// A malformed file must never trap, wherever it stops.
+    @Test func truncatedFilesNeverTrap() {
+        let file = MachOFixture.thin(signature: plist, section: plist)
+        for length in 0..<file.count {
+            _ = MachOEntitlements.propertyList(in: file.prefix(length), cpuType: arm64)
+        }
+        let universal = MachOFixture.universal([(arm64, file)], is64: true)
+        for length in 0..<universal.count {
+            _ = MachOEntitlements.propertyList(in: universal.prefix(length), cpuType: arm64)
+        }
+    }
+
+    @Test func corruptFilesNeverTrap() {
+        let file = MachOFixture.universal([(arm64, MachOFixture.thin(signature: plist, section: plist))], is64: false)
+        for offset in stride(from: 0, to: file.count, by: 1) {
+            for value: UInt8 in [0x00, 0x7F, 0xFF] {
+                var corrupt = file
+                corrupt[offset] = value
+                _ = MachOEntitlements.propertyList(in: corrupt, cpuType: arm64)
+            }
+        }
+        // Every 4-byte field at once pointing past the end, with no valid sum.
+        var huge = MachOFixture.thin(signature: plist)
+        for offset in stride(from: 16, to: huge.count - 3, by: 4) {
+            huge.replaceSubrange(offset..<(offset + 4), with: [0xFF, 0xFF, 0xFF, 0xFF])
+        }
+        #expect(MachOEntitlements.propertyList(in: huge, cpuType: arm64) == nil)
+    }
+
+    #if os(macOS)
+    /// Guards the fixture's format against what `codesign` really writes.
+    @Test func readsARealCodeSignature() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let binary = directory.appending(path: "signed"), entitlements = directory.appending(path: "e.plist")
+        try FileManager.default.copyItem(at: URL(filePath: "/usr/bin/true"), to: binary)
+        try plist.write(to: entitlements)
+
+        let codesign = Process()
+        codesign.executableURL = URL(filePath: "/usr/bin/codesign")
+        codesign.arguments = ["-f", "-s", "-", "--entitlements", entitlements.path, binary.path]
+        codesign.standardError = FileHandle.nullDevice
+        try codesign.run()
+        codesign.waitUntilExit()
+        try #require(codesign.terminationStatus == 0)
+
+        let found = MachOEntitlements.propertyList(in: try Data(contentsOf: binary), cpuType: MachOEntitlements.currentCPUType)
+        #expect(found.flatMap(CloudKitEntitlements.init(propertyList:)) == CloudKitEntitlements(services: ["CloudKit"], containers: ["iCloud.x"]))
+    }
+    #endif
+}
+
+/// Builds minimal Mach-O files, so the parser's tests need no signed binaries.
+private enum MachOFixture {
+    static func plist(services: [String], containers: [String]) -> Data {
+        let values: [String: [String]] = [
+            "com.apple.developer.icloud-services": services,
+            "com.apple.developer.icloud-container-identifiers": containers,
+        ]
+        return (try? PropertyListSerialization.data(fromPropertyList: values, format: .xml, options: 0)) ?? Data()
+    }
+
+    static func thin(signature: Data? = nil, section: Data? = nil, is64Bit: Bool = true) -> Data {
+        let headerSize = is64Bit ? 32 : 28
+        let segmentSize = 72 + 80
+        let commandsSize = (signature == nil ? 0 : 16) + (section == nil ? 0 : segmentSize)
+        var payload = Data()
+        var commands = Data()
+        let dataStart = headerSize + commandsSize
+
+        if let section {
+            let offset = dataStart + payload.count
+            payload.append(section)
+            commands.append(le(UInt32(0x19)))
+            commands.append(le(UInt32(segmentSize)))
+            commands.append(fixedName("__TEXT"))
+            commands.append(Data(count: 40)) // vmaddr ... initprot, before nsects.
+            commands.append(le(UInt32(1)))
+            commands.append(le(UInt32(0)))
+            commands.append(fixedName("__entitlements"))
+            commands.append(fixedName("__TEXT"))
+            commands.append(Data(count: 8))
+            commands.append(le64(UInt64(section.count)))
+            commands.append(le(UInt32(offset)))
+            commands.append(Data(count: 28))
+        }
+        if let signature {
+            let blob = superblob(entitlements: signature)
+            commands.append(le(UInt32(0x1D)))
+            commands.append(le(UInt32(16)))
+            commands.append(le(UInt32(dataStart + payload.count)))
+            commands.append(le(UInt32(blob.count)))
+            payload.append(blob)
+        }
+
+        var file = Data()
+        file.append(le(is64Bit ? 0xFEED_FACF : 0xFEED_FACE))
+        file.append(Data(count: 12))
+        file.append(le(UInt32((signature == nil ? 0 : 1) + (section == nil ? 0 : 1))))
+        file.append(le(UInt32(commandsSize)))
+        file.append(Data(count: headerSize - file.count))
+        file.append(commands)
+        file.append(payload)
+        return file
+    }
+
+    static func universal(_ slices: [(cpu: UInt32, file: Data)], is64: Bool) -> Data {
+        let entrySize = is64 ? 32 : 20
+        var offset = 8 + entrySize * slices.count
+        var header = be(is64 ? 0xCAFE_BABF : 0xCAFE_BABE) + be(UInt32(slices.count))
+        var body = Data()
+        for slice in slices {
+            header += be(slice.cpu) + be(UInt32(0))
+            if is64 {
+                header += be(UInt32(0)) + be(UInt32(offset)) + be(UInt32(0)) + be(UInt32(slice.file.count)) + be(UInt32(0)) + be(UInt32(0))
+            } else {
+                header += be(UInt32(offset)) + be(UInt32(slice.file.count)) + be(UInt32(0))
+            }
+            body.append(slice.file)
+            offset += slice.file.count
+        }
+        return header + body
+    }
+
+    private static func superblob(entitlements: Data) -> Data {
+        // A leading slot proves the entitlements slot is found by type, not position.
+        let other = be(0xFADE_0C02) + be(UInt32(8))
+        let headerSize = 12 + 8 * 2
+        let blob = be(0xFADE_7171) + be(UInt32(entitlements.count + 8)) + entitlements
+        var data = be(0xFADE_0CC0) + be(UInt32(headerSize + other.count + blob.count)) + be(UInt32(2))
+        data += be(UInt32(0)) + be(UInt32(headerSize))
+        data += be(UInt32(5)) + be(UInt32(headerSize + other.count))
+        return data + other + blob
+    }
+
+    private static func fixedName(_ name: String) -> Data {
+        var data = Data(name.utf8)
+        data.append(Data(count: 16 - data.count))
+        return data
+    }
+
+    private static func le(_ value: UInt32) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
+    private static func le64(_ value: UInt64) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
+    private static func be(_ value: UInt32) -> Data { withUnsafeBytes(of: value.bigEndian) { Data($0) } }
+}
+
 @Suite struct ShipPulseKitErrorTests {
     @Test func containerErrorCarriesDetails() {
         let error = ShipPulseKitError.iCloudContainerUnavailable(containerIdentifier: "iCloud.com.example", reason: "no entitlement")
