@@ -41,9 +41,16 @@ struct CloudKitEntitlements: Equatable, Sendable {
     /// - Returns: The entitlements, or `nil` when the executable carries none or can't be
     ///   read. Either way `CKContainer` isn't safe to call.
     static func ofRunningApp() -> CloudKitEntitlements? {
+        Bundle.main.executableURL.flatMap(of(executable:))
+    }
+
+    /// Reads the entitlements of an executable, using the slice this process would run.
+    ///
+    /// - Parameter url: The executable's location.
+    /// - Returns: The entitlements, or `nil` when it carries none or can't be read.
+    static func of(executable url: URL) -> CloudKitEntitlements? {
         // Mapped, so only the pages holding the load commands and entitlements are read.
-        guard let url = Bundle.main.executableURL,
-              let executable = try? Data(contentsOf: url, options: .mappedIfSafe),
+        guard let executable = try? Data(contentsOf: url, options: .mappedIfSafe),
               let propertyList = MachOEntitlements.propertyList(in: executable, cpuType: MachOEntitlements.currentCPUType)
         else { return nil }
         return CloudKitEntitlements(propertyList: propertyList)

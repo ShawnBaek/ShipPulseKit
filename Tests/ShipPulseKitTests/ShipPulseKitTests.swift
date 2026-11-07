@@ -450,7 +450,8 @@ private actor RecordingUploader: RecordUploading {
     }
 
     #if os(macOS)
-    /// Guards the fixture's format against what `codesign` really writes.
+    /// Guards the fixture's format against what `codesign` really writes, and the path from
+    /// file to entitlements: if it broke, every host app would silently lose its metrics.
     @Test func readsARealCodeSignature() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -467,8 +468,18 @@ private actor RecordingUploader: RecordUploading {
         codesign.waitUntilExit()
         try #require(codesign.terminationStatus == 0)
 
-        let found = MachOEntitlements.propertyList(in: try Data(contentsOf: binary), cpuType: MachOEntitlements.currentCPUType)
-        #expect(found.flatMap(CloudKitEntitlements.init(propertyList:)) == CloudKitEntitlements(services: ["CloudKit"], containers: ["iCloud.x"]))
+        #expect(CloudKitEntitlements.of(executable: binary) == CloudKitEntitlements(services: ["CloudKit"], containers: ["iCloud.x"]))
+    }
+
+    @Test func aMissingExecutableHasNoEntitlements() {
+        #expect(CloudKitEntitlements.of(executable: URL(filePath: "/no/such/executable")) == nil)
+    }
+
+    /// `ofRunningApp()` only supplies the URL; this proves it reaches the executable that runs.
+    @Test func runningAppReadsItsOwnExecutable() throws {
+        let url = try #require(Bundle.main.executableURL)
+        #expect(FileManager.default.isExecutableFile(atPath: url.path))
+        #expect(CloudKitEntitlements.ofRunningApp() == CloudKitEntitlements.of(executable: url))
     }
     #endif
 }
