@@ -25,10 +25,11 @@ exports() { # SDK name, framework: every symbol its text stub declares, one per 
         echo "error: no text stub at $stub, so its imports can't be identified." >&2
         exit 1
     fi
-    # Stubs list Objective-C classes by bare name. The extra lines for other words are harmless,
-    # because the result is only intersected with real imports.
+    # Stubs list Objective-C names bare, and those can start with an underscore too (_TtC...).
+    # The extra lines for other words are harmless, because the result is only intersected with
+    # real imports.
     tr -s " ,'[]\t" '\n' <"$stub" |
-        awk '/^_/ { print; next } { print "_OBJC_CLASS_$_" $0; print "_OBJC_METACLASS_$_" $0 }' |
+        awk '{ print; print "_OBJC_CLASS_$_" $0; print "_OBJC_METACLASS_$_" $0; print "_OBJC_IVAR_$_" $0; print "_OBJC_EHTYPE_$_" $0 }' |
         LC_ALL=C sort -u
 }
 
