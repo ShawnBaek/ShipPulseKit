@@ -1,6 +1,6 @@
 #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
 import Foundation
-import MetricKit
+@_weakLinked import MetricKit
 import ShipPulseKitCore
 
 /// Collects iOS 27 MetricKit reports through `MetricManager`'s async streams.

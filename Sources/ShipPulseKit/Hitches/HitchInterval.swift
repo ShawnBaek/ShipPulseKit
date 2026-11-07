@@ -1,6 +1,6 @@
 #if canImport(MetricKit) && !os(watchOS) && !os(tvOS) && !os(visionOS)
 import Foundation
-import MetricKit
+@_weakLinked import MetricKit
 import os
 import ShipPulseKitCore
 
@@ -20,23 +20,31 @@ import ShipPulseKitCore
 /// every API that opens one is a main-actor UI API, so the compiler checks every use and no
 /// lock is needed. It ends exactly once, and an interval released without ``end()`` is
 /// closed automatically.
+///
+/// On an OS seed that lacks part of the Swift MetricKit API, an interval measures nothing and
+/// all of this is harmless.
 @MainActor
 public final class HitchInterval {
     private let name: StaticString
-    private let log: OSLog
-    private let signpostID: OSSignpostID
-    private var isOpen = true
+    /// The signpost to end, or `nil` once ended or if it never began.
+    private var openSignpost: (log: OSLog, id: OSSignpostID)?
 
-    /// Begins the animation signpost.
+    /// Whether the signpost has begun and not yet ended.
+    var isOpen: Bool { openSignpost != nil }
+
+    /// Begins the animation signpost, unless the OS lacks the API for it.
     ///
     /// - Parameters:
     ///   - name: The region's name, shown in ShipPulse.
     ///   - category: The signpost category; one `OSLog` is cached per category.
-    init(name: StaticString, category: String) {
+    ///   - isMetricKitAvailable: Whether MetricKit may be called.
+    init(name: StaticString, category: String, isMetricKitAvailable: Bool = MetricKitSupport.isAvailable) {
         self.name = name
-        self.log = SignpostLogs.handle(category: category)
-        self.signpostID = OSSignpostID(log: log)
-        mxSignpostAnimationIntervalBegin(log: log, name: name, signpostID: signpostID)
+        guard isMetricKitAvailable else { return }
+        let log = SignpostLogs.handle(category: category)
+        let id = OSSignpostID(log: log)
+        mxSignpostAnimationIntervalBegin(log: log, name: name, signpostID: id)
+        openSignpost = (log, id)
     }
 
     /// Ends the interval.
@@ -44,9 +52,9 @@ public final class HitchInterval {
     /// Call it on the main actor. Calling it again is harmless: the signpost ends once. An
     /// interval released without `end()` is closed automatically.
     public func end() {
-        guard isOpen else { return }
-        isOpen = false
-        mxSignpost(.end, log: log, name: name, signpostID: signpostID)
+        guard let signpost = openSignpost else { return }
+        openSignpost = nil
+        mxSignpost(.end, log: signpost.log, name: name, signpostID: signpost.id)
     }
 
     /// Closes an interval dropped without ``end()``, so its signpost doesn't leak.

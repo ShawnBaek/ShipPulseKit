@@ -221,6 +221,8 @@ sampling rates (`SPConfig`) or delete old records. If they want it:
   - Check the container (step 2).
   - Check that the device is signed in to iCloud.
   - Check the app's log for the `start()` error.
+  - Check the log for "ShipPulseKit is off". On an OS seed that lacks part of the Swift
+    MetricKit API, the SDK turns itself off. The app runs normally, and no change is needed.
 
 ## Report back
 

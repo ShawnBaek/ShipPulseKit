@@ -24,7 +24,8 @@ Sources/ShipPulseKitCore/     Pure Swift, no Apple-UI or CloudKit: Schema, Metri
 Sources/ShipPulseKit/         The SDK: Engine, MetricKitCollector, ReportMapper,
                               DataContainer (sole owner of on-device state: queued
                               records and UserDefaults keys), CloudKitUploader,
-                              RetentionTracker (pure), ScreenReporter, Hitches/*
+                              RetentionTracker (pure), ScreenReporter, Hitches/*,
+                              MetricKitSupport + generated MetricKitSymbols
 Sources/ShipPulseKitObjC/     One function: catches the NSException CloudKit raises when the
                               host app has no iCloud entitlement.
 CloudKit/ShipPulseKit.ckdb    Schema fragment, merged into each host container
@@ -32,6 +33,7 @@ docs/                         CloudKitSchema.md, HitchTracking.md
 Sources/*/*.docc/             DocC landing pages (Product → Build Documentation in Xcode)
 Tests/ShipPulseKitTests/      Swift Testing
 skills/                       Agent skill for apps integrating the SDK
+scripts/                      update-metrickit-symbols.sh
 ```
 
 ## Commands
@@ -126,6 +128,15 @@ Import replaces the whole schema of the target environment.
     - Adding a public enum case or protocol requirement, or removing or narrowing a public
       symbol, is an API change: a minor bump before 1.0, a major bump after.
     - No `open`, and no public protocols for apps to implement, unless deliberate.
+13. **Weak-link MetricKit.** Every `import MetricKit` and `import StateReporting` is
+    `@_weakLinked`, because some OS seeds lack symbols while reporting the release's version,
+    and a strong reference aborts the host app in dyld before `main`. `MetricKitSupport` keeps
+    the SDK off unless every referenced symbol exists, so anything that reaches MetricKit must
+    stay behind it. After using a new MetricKit API, run `scripts/update-metrickit-symbols.sh`;
+    `swift test` fails if the list misses a symbol on macOS, and
+    `scripts/update-metrickit-symbols.sh --check` covers every platform, Simulator and
+    configuration. Run it with each new Xcode too: hosts compile this source against their own
+    SDK, whose inlined defaults can reference new symbols.
 
 ## Testing notes
 
