@@ -25,9 +25,10 @@ Sources/ShipPulseKit/         The SDK: Engine, MetricKitCollector, ReportMapper,
                               DataContainer (sole owner of on-device state: queued
                               records and UserDefaults keys), CloudKitUploader,
                               RetentionTracker (pure), ScreenReporter, Hitches/*,
-                              MetricKitSupport + generated MetricKitSymbols
-Sources/ShipPulseKitObjC/     One function: catches the NSException CloudKit raises when the
-                              host app has no iCloud entitlement.
+                              MetricKitSupport + generated MetricKitSymbols,
+                              CloudKitEntitlements (checked before touching CKContainer)
+Sources/ShipPulseKitObjC/     One function: catches an NSException CloudKit raises. It can't
+                              catch CloudKit's trap when the app has no iCloud entitlement.
 CloudKit/ShipPulseKit.ckdb    Schema fragment, merged into each host container
 docs/                         CloudKitSchema.md, HitchTracking.md
 Sources/*/*.docc/             DocC landing pages (Product → Build Documentation in Xcode)
@@ -62,7 +63,8 @@ Import replaces the whole schema of the target environment.
    - No `fatalError`, force unwraps on external data, or `try!` in `Sources/ShipPulseKit`.
    - Keep main-thread work tiny.
    - A missing iCloud container makes `start()` throw `ShipPulseKitError`; nothing else
-     fails.
+     fails. Without the entitlement CloudKit traps on iOS, which nothing can catch, so
+     `CloudKitEntitlements` must pass before any `CKContainer` call.
 2. **Schema changes go in three places in one change:**
    - `CloudKit/ShipPulseKit.ckdb`
    - `Sources/ShipPulseKitCore/Schema.swift`

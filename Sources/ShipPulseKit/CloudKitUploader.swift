@@ -38,12 +38,28 @@ struct CloudKitUploader: RecordUploading {
 
     /// Opens the configured container.
     ///
-    /// CloudKit raises an Objective-C exception when the app has no usable container. This
-    /// catches it and throws instead, so the host app never crashes.
+    /// Without an entitlement, `CKContainer` raises an exception on macOS and traps on iOS,
+    /// and nothing can catch a trap. So the entitlements are checked first and CloudKit isn't
+    /// touched unless they allow the container. `SPKCatchException` remains for exceptions
+    /// CloudKit raises for any other reason.
     ///
-    /// - Parameter configuration: Supplies the container identifier and database.
+    /// - Parameters:
+    ///   - configuration: Supplies the container identifier and database.
+    ///   - entitlements: The app's entitlements, or `nil` when it has none. Tests pass their own.
     /// - Throws: ``ShipPulseKitError`` with code ``ShipPulseKitError/Code/iCloudContainerUnavailable``.
-    init(configuration: Configuration) throws(ShipPulseKitError) {
+    init(
+        configuration: Configuration,
+        entitlements: CloudKitEntitlements? = CloudKitEntitlements.ofRunningApp()
+    ) throws(ShipPulseKitError) {
+        guard let entitlements else {
+            throw .iCloudContainerUnavailable(
+                containerIdentifier: configuration.containerIdentifier,
+                reason: "the app's executable has no entitlements"
+            )
+        }
+        if let problem = entitlements.problem(opening: configuration.containerIdentifier) {
+            throw .iCloudContainerUnavailable(containerIdentifier: configuration.containerIdentifier, reason: problem)
+        }
         var resolved: CKContainer?
         let exception = SPKCatchException {
             resolved = configuration.containerIdentifier.map(CKContainer.init(identifier:)) ?? CKContainer.default()

@@ -18,7 +18,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "ShipPulseKitCore"),
-        // Catches the exception CloudKit raises when the app has no iCloud entitlement.
+        // Catches exceptions CloudKit raises when it opens a container.
         .target(name: "ShipPulseKitObjC"),
         .target(name: "ShipPulseKit", dependencies: ["ShipPulseKitCore", "ShipPulseKitObjC"]),
         .testTarget(name: "ShipPulseKitTests", dependencies: ["ShipPulseKit", "ShipPulseKitCore"]),
